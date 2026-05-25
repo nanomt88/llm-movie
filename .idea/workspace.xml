@@ -4,13 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="615dd366-a852-4085-a5ae-c5d357ba04e7" name="更改" comment="">
-      <change afterPath="$PROJECT_DIR$/data/holiday.csv" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/holiday_util.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/llm-movie.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/llm-movie.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extrace.py" beforeDir="false" afterPath="$PROJECT_DIR$/extrace.py" afterDir="false" />
-    </list>
+    <list default="true" id="615dd366-a852-4085-a5ae-c5d357ba04e7" name="更改" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -98,7 +92,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1779363049580</updated>
-      <workItem from="1779363050653" duration="13875000" />
+      <workItem from="1779363050653" duration="14816000" />
     </task>
     <servers />
   </component>
