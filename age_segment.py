@@ -61,13 +61,13 @@ def _age_to_segment(age: int) -> str:
 
 
 def extract_explicit_age(text: str):
-    """从文本中提取显式年龄，返回 (年龄段, 具体年龄) 或 (None, None)"""
+    """从文本中提取显式年龄，返回 (年龄段, 具体年龄, 原文) 或 (None, None)"""
     for pat in _EXPLICIT_AGE_PATTERNS:
         for m in pat.finditer(text):
             age = int(m.group(1))
             if 1 <= age <= 120:  # 合理年龄范围
-                return _age_to_segment(age), age
-    return None, None
+                return _age_to_segment(age), age, text
+    return None, None, None
 
 
 # ------------------------------------------------------------------
@@ -80,6 +80,8 @@ _AGE_RULES = [
     # === <18 相关 ===
     (r'\b(?:kid\s+movie|children\s+movie|cartoon|animation|disney|pixar|dreamworks|适合孩子)',
      [('<18', 2), ('18-25', 1)]),
+    (r'\b(?:i\s+(?:am|\'?m)\s+a\s+child|i\s+(?:am|\'?m)\s+a\s+kid|i\s+(?:am|\'?m)\s+a\s+teenager|i\s+(?:am|\'?m)\s+a\s+teen)',
+     [('<18', 3), ('18-25', 1)]),
 
     # === 18-25 相关 ===
     (r'\b(?:college|university|dorm|roommate|freshman|sophomore|high\s*school|teen|teenager|classmate)',
@@ -116,11 +118,21 @@ _AGE_RULES = [
      [('50+', 2), ('36-50', 1)]),
 ]
 
+# pat : _AGE_RULES 中每条规则的第一个元素，即正则表达式字符串（pattern）
+# segs :  _AGE_RULES 中每条规则的第二个元素，即年龄段和权重的列表
 _AGE_RULES_COMPILED = [(re.compile(pat, re.I), segs) for pat, segs in _AGE_RULES]
 
 
 def infer_implicit_segment(texts: list[str]):
-    """从用户的多条发言文本中推断年龄段，返回 (年龄段, 置信度分数, 匹配关键词)"""
+    """从用户的多条发言文本中推断年龄段，返回 (年龄段, 置信度分数, 匹配关键词, 原文)"""
+    # 生成一个字典，生成后的值为：
+    # scores = {
+    #     '<18': 0,
+    #     '18-25': 0,
+    #     '26-35': 0,
+    #     '36-50': 0,
+    #     '50+': 0
+    # }
     scores = {s: 0 for s in AGE_SEGMENTS}
     matched_keywords = []
 
@@ -135,11 +147,11 @@ def infer_implicit_segment(texts: list[str]):
 
     # 如果没有任何规则命中，返回未知
     if max(scores.values()) == 0:
-        return None, 0, []
+        return None, 0, [], None
 
     best_seg = max(scores, key=lambda s: scores[s])
     best_score = scores[best_seg]
-    return best_seg, best_score, matched_keywords
+    return best_seg, best_score, matched_keywords, all_text
 
 
 # ------------------------------------------------------------------
@@ -160,7 +172,9 @@ def segment_users(data_path: str) -> pd.DataFrame:
     """
     df = pd.read_csv(data_path)
 
+    # defaultdict 是 Python collections 模块中的一个特殊字典类型，list为指定value的类型
     # 按 user_id 收集所有 USER 角色的文本
+    # 格式为： { user1 : ['USER', 'Hello']}
     user_bucket = defaultdict(list)
     for _, row in df.iterrows():
         try:
@@ -176,20 +190,23 @@ def segment_users(data_path: str) -> pd.DataFrame:
         best_seg = None
         best_source = None
         best_detail = None
+        # 置信度， 3-最高（对话中提到年龄）， 2-较高（权重推断出来的）
         best_conf = 0
+        best_raw_text = None
 
         for t in texts:
-            seg, age = extract_explicit_age(t)
+            seg, age, raw_text = extract_explicit_age(t)
             if seg is not None:
                 best_seg = seg
                 best_source = 'explicit'
                 best_detail = str(age)
                 best_conf = 3
+                best_raw_text = raw_text
                 break  # 显式命中即停止
 
         # ---- 方法 2: 启发式推断 ----
         if best_seg is None:
-            seg, score, kws = infer_implicit_segment(texts)
+            seg, score, kws, raw_text = infer_implicit_segment(texts)
             if seg is not None:
                 # 置信度映射: 分数>=4 为高, >=2 为中, 否则低
                 conf = 2 if score >= 4 else 1
@@ -197,6 +214,7 @@ def segment_users(data_path: str) -> pd.DataFrame:
                 best_source = 'implicit'
                 best_detail = ', '.join(set(kws))
                 best_conf = conf
+                best_raw_text = raw_text
 
         results.append({
             'user_id': uid,
@@ -205,6 +223,7 @@ def segment_users(data_path: str) -> pd.DataFrame:
             'source': best_source or 'unknown',
             'detail': best_detail or '',
             'msg_count': len(texts),
+            'raw_text' : best_raw_text or 'unknown',
         })
 
     return pd.DataFrame(results)
@@ -233,10 +252,10 @@ def add_age_to_csv(data_path: str, out_path: str = None):
 
 def get_age_of(text: str) -> tuple:
     """对单条文本直接判断年龄段，返回 (年龄段, 置信度, 来源)"""
-    seg, age = extract_explicit_age(text)
+    seg, age, raw_text = extract_explicit_age(text)
     if seg:
         return seg, 3, 'explicit'
-    seg, score, kws = infer_implicit_segment([text])
+    seg, score, kws,_  = infer_implicit_segment([text])
     if seg:
         return seg, (2 if score >= 4 else 1), 'implicit'
     return 'unknown', 0, 'unknown'
@@ -249,7 +268,7 @@ if __name__ == '__main__':
     import os
 
     data_dir = os.path.join(os.path.dirname(__file__), 'data')
-    csv_path = os.path.join(data_dir, 'test-min-data.csv')
+    csv_path = os.path.join(data_dir, 'my-test.csv')
 
     # ---- Demo ----
     print("=" * 60)
@@ -292,7 +311,8 @@ if __name__ == '__main__':
     print(f"  {known['source'].value_counts().to_string()}")
 
     # 输出示例
-    print("\n示例结果 (前 10):")
-    for _, r in known.head(10).iterrows():
+    print("\n示例结果 (前 5):")
+    for _, r in known.head(5).iterrows():
         print(f"  {r['user_id']:15s} → {r['age_segment']:6s} "
-              f"(conf={r['confidence']}, src={r['source']}, detail={r['detail'][:30]})")
+              # f"(conf={r['confidence']}, src={r['source']}, detail={r['detail'][:30]})")
+              f"(conf={r['confidence']}, src={r['source']}, detail={r['detail'][:30]}), raw_text={r['raw_text']}")
