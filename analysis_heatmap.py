@@ -66,7 +66,7 @@ from holiday_util import HolidayCalendar
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
-CSV_PATH = os.path.join(DATA_DIR, 'test-min-data.csv')
+CSV_PATH = os.path.join(DATA_DIR, 'test-data.csv')
 HOLIDAY_CSV = os.path.join(DATA_DIR, 'holiday.csv')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -80,6 +80,8 @@ EMOTION_CATEGORIES = [
     '浪漫/温情', '兴奋/刺激', '怀旧/经典',
     '存在主义/沉思', '普通/综合',
 ]
+
+
 
 _EMOTION_RULES = [
     # 快乐/轻松
