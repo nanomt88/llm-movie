@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="615dd366-a852-4085-a5ae-c5d357ba04e7" name="更改" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/age_segment.py" beforeDir="false" afterPath="$PROJECT_DIR$/age_segment.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -122,7 +121,7 @@
       <option name="presentableId" value="Default" />
       <updated>1779363049580</updated>
       <workItem from="1779363050653" duration="16089000" />
-      <workItem from="1779706673136" duration="7085000" />
+      <workItem from="1779706673136" duration="9818000" />
     </task>
     <servers />
   </component>
@@ -138,6 +137,6 @@
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/llm_movie$extrace.coverage" NAME="extrace 覆盖结果" MODIFIED="1779369306328" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/llm_movie$age_segment.coverage" NAME="age_segment 覆盖结果" MODIFIED="1779798116215" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/llm_movie$age_segment.coverage" NAME="age_segment 覆盖结果" MODIFIED="1779798890203" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
