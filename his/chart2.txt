@@ -1,0 +1,98 @@
+def build_analysis_data(df: pd.DataFrame, cal: HolidayCalendar,
+                    user_seg: dict) -> list[dict]:
+"""
+核心数据组装函数。
+
+分两阶段执行：
+  阶段一 — 收集所有用户发言文本，批量进行 BERT 情绪识别
+  阶段二 — 遍历原始数据，组装完整分析记录
+
+:param df: 原始对话数据表
+:param cal: 节假日日历对象
+:param user_seg: 用户年龄段映射 {user_id: age_segment}
+:return: 分析记录列表
+"""
+movie_info = _load_movie_info()
+not_found_ids: list[str] = []
+
+# ── 阶段一：批量情绪识别 ──
+# 先遍历一次，收集所有有效文本，然后统一走 BERT 批量推理
+text_batch: list[str] = []
+text_indices: list[int] = []       # 保留原始 DataFrame 索引
+
+for idx, row in df.iterrows():
+    if row.get('is_seeker') != False:
+        continue
+
+    user_text = extract_user_text_from_context(row.get('context_raw'))
+    if not user_text:
+        user_text = extract_user_text_from_context(row.get('context_processed'))
+
+    # 同时检查是否有可提取的电影推荐（确保该行最终会产出记录）
+    sys_text = extract_movie_text_from_system(row.get('processed'))
+    if not sys_text:
+        continue
+    imdb_ids = extract_imdb_ids(sys_text)
+    if not imdb_ids:
+        continue
+
+    text_batch.append(user_text or '')
+    text_indices.append(idx)
+
+print(f"  [情绪识别] 共 {len(text_batch)} 条文本，正在使用 BERT 模型推理 ...")
+emotion_labels = classify_emotion_batch(text_batch)
+
+# 构建索引 → 情绪的快速查找表
+idx_to_emotion = dict(zip(text_indices, emotion_labels))
+
+# ── 阶段二：组装分析记录 ──
+records = []
+
+for idx, row in df.iterrows():
+    if row.get('is_seeker') != False:
+        continue
+    if idx not in idx_to_emotion:
+        continue
+
+    user_id = row.get('user_id')
+    age_seg = user_seg.get(user_id, 'unknown')
+
+    # 情绪（已预计算）
+    emotion = idx_to_emotion[idx]
+
+    # ---- 电影类型提取 ----
+    sys_text = extract_movie_text_from_system(row.get('processed'))
+    imdb_ids = extract_imdb_ids(sys_text)
+    genres = classify_genre_from_ids(imdb_ids, movie_info, not_found_ids)
+    if not genres:
+        continue
+
+    # ---- 节假日判断 ----
+    utc_val = row.get('utc_time')
+    holiday_name = '非节假日'
+    try:
+        dt = datetime.utcfromtimestamp(int(utc_val))
+        if cal.is_holiday(dt):
+            names = cal.get_holiday_names(dt)
+            if names:
+                holiday_name = names[0]
+    except (ValueError, TypeError, OverflowError):
+        pass
+
+    # ---- 产出记录 ----
+    for genre in genres:
+        records.append({
+            'age_segment': age_seg,
+            'holiday_name': holiday_name,
+            'emotion': emotion,
+            'genre': genre,
+        })
+
+# 报告未找到的 IMDB ID
+if not_found_ids:
+    unique_not_found = sorted(set(not_found_ids))
+    print(f"\n  [!] {len(unique_not_found)} 个 IMDB ID 在 movie_info.json 中未找到:")
+    for tid in unique_not_found:
+        print(f"      - {tid}")
+
+return records
