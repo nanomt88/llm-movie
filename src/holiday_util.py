@@ -31,7 +31,7 @@ class HolidayCalendar:
     def __init__(self, csv_path: Optional[str] = None):
         # 默认路径：与本文件同级的 data/holiday.csv
         if csv_path is None:
-            csv_path = os.path.join(os.path.dirname(__file__), 'data', 'holiday.csv')
+            csv_path = os.path.join(os.path.dirname(__file__), '../data', 'holiday.csv')
 
         # 读取 CSV
         raw = pd.read_csv(csv_path, dtype=str)
@@ -185,10 +185,89 @@ def get_holiday_names(dt) -> list[str]:
     return _get_calendar().get_holiday_names(dt)
 
 
-# ------------------------------------------------------------------
-# 使用示例
-# ------------------------------------------------------------------
-if __name__ == '__main__':
+def merge_all_holiday_records(input_dir: str = '../data/yearly',
+                              output_file: str = '../data/all_holiday_records.csv'):
+    """
+    合并多个 CSV 文件中的节假日记录，提取所有落在节假日的数据。
+
+    参数：
+        input_dir: 输入目录（包含多个 data_*.csv 文件）
+        output_file: 输出文件路径
+    """
+    import sys
+    sys.path.insert(0, os.path.dirname(__file__))
+    from extrace import load_records_pd
+
+    cal = HolidayCalendar()
+
+    # 获取所有 CSV 文件
+    csv_files = [f for f in os.listdir(input_dir) if f.endswith('.csv')]
+
+    if not csv_files:
+        print(f"警告: {input_dir} 中没有找到 CSV 文件")
+        return None
+
+    print(f"发现 {len(csv_files)} 个 CSV 文件")
+
+    all_holiday_records = []
+    total_records = 0
+    total_holiday = 0
+
+    for csv_file in sorted(csv_files):
+        csv_path = os.path.join(input_dir, csv_file)
+
+        try:
+            # 加载数据
+            df = load_records_pd(csv_path)
+            total_records += len(df)
+
+            # 添加节假日标记
+            df_tagged = cal.add_holiday_flags(df, col='utc_time')
+
+            # 筛选节假日记录
+            holiday_df = df_tagged[df_tagged['holiday']].copy()
+
+            # 添加来源文件信息
+            holiday_df['source_file'] = csv_file
+
+            all_holiday_records.append(holiday_df)
+            total_holiday += len(holiday_df)
+
+            print(f"✓ {csv_file}: {len(df)} 条记录, {len(holiday_df)} 条节假日")
+
+        except Exception as e:
+            print(f"✗ {csv_file}: 处理失败 - {e}")
+            continue
+
+    if not all_holiday_records:
+        print("未找到任何节假日记录")
+        return None
+
+    # 合并所有 DataFrame
+    merged_df = pd.concat(all_holiday_records, ignore_index=True)
+
+    # 保存到 CSV
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    merged_df.to_csv(output_file, index=False, encoding='utf-8-sig')
+
+    print(f"\n{'=' * 60}")
+    print(f"合并完成！")
+    print(f"{'=' * 60}")
+    print(f"总记录数:     {total_records}")
+    print(f"节假日记录:   {total_holiday}")
+    print(f"占比:         {total_holiday / total_records * 100:.2f}%")
+    print(f"输出文件:     {output_file}")
+    print(f"{'=' * 60}\n")
+
+    # 统计信息
+    print("节假日分布统计:")
+    holiday_stats = merged_df['holiday_name'].value_counts()
+    for name, count in holiday_stats.head(20).items():
+        print(f"  {name:20s}: {count:5d} 条")
+
+    return merged_df
+
+def main_test():
     cal = HolidayCalendar()
 
     # 示例 1：判断单日
@@ -202,10 +281,10 @@ if __name__ == '__main__':
 
     # 示例 3：与 extrace.py 的 pd.DataFrame 配合
     print("\n--- 与 DataFrame 配合（按 is_seeker 过滤用户发言） ---")
-    data_dir = os.path.join(os.path.dirname(__file__), 'data')
+    data_dir = os.path.join(os.path.dirname(__file__), 'data/yearly')
     csv_candidates = [f for f in os.listdir(data_dir) if f.endswith('.csv') and f != 'holiday.csv']
-    if csv_candidates:
-        csv_path = os.path.join(data_dir, csv_candidates[0])
+    for csv_file in csv_candidates:
+        csv_path = os.path.join(data_dir, csv_file)
         import sys
         sys.path.insert(0, os.path.dirname(__file__))
         from extrace import load_records_pd
@@ -219,17 +298,25 @@ if __name__ == '__main__':
         for _, r in user_holiday.head(5).iterrows():
             d = datetime.utcfromtimestamp(int(r['utc_time'])).date()
             print(f"  {r['conv_id']}  {d} → {cal.get_holiday_names(d)}")
-    else:
-        print("  未找到数据 CSV，跳过 DataFrame 示例")
 
-    # 示例 4：直接给 DataFrame 打标签
-    data_dir = os.path.join(os.path.dirname(__file__), 'data')
-    csv_candidates = [f for f in os.listdir(data_dir) if f.endswith('.csv') and f != 'holiday.csv']
-    if csv_candidates:
+        # 示例 4：直接给 DataFrame 打标签
         import pandas as pd
-        df = pd.read_csv(os.path.join(data_dir, csv_candidates[0]))
+        df = pd.read_csv(os.path.join(data_dir, csv_file))
         df_tagged = cal.add_holiday_flags(df, col='utc_time')
         holiday_rows = df_tagged[df_tagged['holiday']]
         print(f"\n{len(holiday_rows)} 条记录落在节假日")
         for _, r in holiday_rows.head(5).iterrows():
             print(f"  {r['conv_id']} → {r['holiday_name']} ({r['holiday_type']})")
+
+
+# ------------------------------------------------------------------
+# 使用示例
+# ------------------------------------------------------------------
+if __name__ == '__main__':
+    # 运行合并功能
+    result = merge_all_holiday_records()
+
+    # 如果需要查看结果
+    if result is not None:
+        print(f"\n前 5 条记录:")
+        print(result[['conv_id', 'utc_time', 'holiday_name', 'source_file']].head())
