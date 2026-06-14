@@ -1,0 +1,810 @@
+{
+  "total": 12591,
+  "emotion_distribution": {
+    "正面": 9735,
+    "负面": 1676,
+    "中性": 1180
+  },
+  "samples": [
+    {
+      "idx": 0,
+      "emotion": "正面"
+    },
+    {
+      "idx": 2,
+      "emotion": "正面"
+    },
+    {
+      "idx": 4,
+      "emotion": "正面"
+    },
+    {
+      "idx": 6,
+      "emotion": "正面"
+    },
+    {
+      "idx": 8,
+      "emotion": "正面"
+    },
+    {
+      "idx": 10,
+      "emotion": "正面"
+    },
+    {
+      "idx": 12,
+      "emotion": "正面"
+    },
+    {
+      "idx": 14,
+      "emotion": "正面"
+    },
+    {
+      "idx": 16,
+      "emotion": "正面"
+    },
+    {
+      "idx": 18,
+      "emotion": "正面"
+    },
+    {
+      "idx": 20,
+      "emotion": "正面"
+    },
+    {
+      "idx": 22,
+      "emotion": "正面"
+    },
+    {
+      "idx": 24,
+      "emotion": "正面"
+    },
+    {
+      "idx": 26,
+      "emotion": "负面"
+    },
+    {
+      "idx": 28,
+      "emotion": "负面"
+    },
+    {
+      "idx": 30,
+      "emotion": "负面"
+    },
+    {
+      "idx": 33,
+      "emotion": "负面"
+    },
+    {
+      "idx": 35,
+      "emotion": "负面"
+    },
+    {
+      "idx": 37,
+      "emotion": "正面"
+    },
+    {
+      "idx": 39,
+      "emotion": "正面"
+    },
+    {
+      "idx": 41,
+      "emotion": "正面"
+    },
+    {
+      "idx": 43,
+      "emotion": "正面"
+    },
+    {
+      "idx": 45,
+      "emotion": "正面"
+    },
+    {
+      "idx": 47,
+      "emotion": "正面"
+    },
+    {
+      "idx": 49,
+      "emotion": "负面"
+    },
+    {
+      "idx": 51,
+      "emotion": "正面"
+    },
+    {
+      "idx": 53,
+      "emotion": "正面"
+    },
+    {
+      "idx": 58,
+      "emotion": "正面"
+    },
+    {
+      "idx": 61,
+      "emotion": "正面"
+    },
+    {
+      "idx": 63,
+      "emotion": "正面"
+    },
+    {
+      "idx": 67,
+      "emotion": "中性"
+    },
+    {
+      "idx": 69,
+      "emotion": "正面"
+    },
+    {
+      "idx": 71,
+      "emotion": "正面"
+    },
+    {
+      "idx": 73,
+      "emotion": "正面"
+    },
+    {
+      "idx": 75,
+      "emotion": "正面"
+    },
+    {
+      "idx": 77,
+      "emotion": "正面"
+    },
+    {
+      "idx": 79,
+      "emotion": "正面"
+    },
+    {
+      "idx": 81,
+      "emotion": "正面"
+    },
+    {
+      "idx": 83,
+      "emotion": "正面"
+    },
+    {
+      "idx": 85,
+      "emotion": "正面"
+    },
+    {
+      "idx": 87,
+      "emotion": "正面"
+    },
+    {
+      "idx": 89,
+      "emotion": "正面"
+    },
+    {
+      "idx": 91,
+      "emotion": "正面"
+    },
+    {
+      "idx": 93,
+      "emotion": "正面"
+    },
+    {
+      "idx": 95,
+      "emotion": "中性"
+    },
+    {
+      "idx": 96,
+      "emotion": "正面"
+    },
+    {
+      "idx": 98,
+      "emotion": "正面"
+    },
+    {
+      "idx": 100,
+      "emotion": "正面"
+    },
+    {
+      "idx": 102,
+      "emotion": "正面"
+    },
+    {
+      "idx": 104,
+      "emotion": "正面"
+    },
+    {
+      "idx": 106,
+      "emotion": "正面"
+    },
+    {
+      "idx": 108,
+      "emotion": "正面"
+    },
+    {
+      "idx": 110,
+      "emotion": "正面"
+    },
+    {
+      "idx": 112,
+      "emotion": "正面"
+    },
+    {
+      "idx": 114,
+      "emotion": "正面"
+    },
+    {
+      "idx": 116,
+      "emotion": "正面"
+    },
+    {
+      "idx": 118,
+      "emotion": "正面"
+    },
+    {
+      "idx": 120,
+      "emotion": "正面"
+    },
+    {
+      "idx": 122,
+      "emotion": "正面"
+    },
+    {
+      "idx": 124,
+      "emotion": "中性"
+    },
+    {
+      "idx": 126,
+      "emotion": "正面"
+    },
+    {
+      "idx": 127,
+      "emotion": "中性"
+    },
+    {
+      "idx": 129,
+      "emotion": "正面"
+    },
+    {
+      "idx": 131,
+      "emotion": "正面"
+    },
+    {
+      "idx": 133,
+      "emotion": "正面"
+    },
+    {
+      "idx": 135,
+      "emotion": "正面"
+    },
+    {
+      "idx": 137,
+      "emotion": "中性"
+    },
+    {
+      "idx": 139,
+      "emotion": "中性"
+    },
+    {
+      "idx": 142,
+      "emotion": "中性"
+    },
+    {
+      "idx": 144,
+      "emotion": "中性"
+    },
+    {
+      "idx": 146,
+      "emotion": "中性"
+    },
+    {
+      "idx": 148,
+      "emotion": "中性"
+    },
+    {
+      "idx": 150,
+      "emotion": "中性"
+    },
+    {
+      "idx": 152,
+      "emotion": "中性"
+    },
+    {
+      "idx": 155,
+      "emotion": "中性"
+    },
+    {
+      "idx": 157,
+      "emotion": "中性"
+    },
+    {
+      "idx": 159,
+      "emotion": "中性"
+    },
+    {
+      "idx": 161,
+      "emotion": "中性"
+    },
+    {
+      "idx": 163,
+      "emotion": "正面"
+    },
+    {
+      "idx": 165,
+      "emotion": "正面"
+    },
+    {
+      "idx": 167,
+      "emotion": "正面"
+    },
+    {
+      "idx": 168,
+      "emotion": "正面"
+    },
+    {
+      "idx": 170,
+      "emotion": "正面"
+    },
+    {
+      "idx": 172,
+      "emotion": "正面"
+    },
+    {
+      "idx": 174,
+      "emotion": "正面"
+    },
+    {
+      "idx": 176,
+      "emotion": "正面"
+    },
+    {
+      "idx": 178,
+      "emotion": "正面"
+    },
+    {
+      "idx": 181,
+      "emotion": "正面"
+    },
+    {
+      "idx": 183,
+      "emotion": "正面"
+    },
+    {
+      "idx": 185,
+      "emotion": "正面"
+    },
+    {
+      "idx": 187,
+      "emotion": "正面"
+    },
+    {
+      "idx": 189,
+      "emotion": "正面"
+    },
+    {
+      "idx": 191,
+      "emotion": "正面"
+    },
+    {
+      "idx": 192,
+      "emotion": "正面"
+    },
+    {
+      "idx": 194,
+      "emotion": "正面"
+    },
+    {
+      "idx": 196,
+      "emotion": "正面"
+    },
+    {
+      "idx": 199,
+      "emotion": "正面"
+    },
+    {
+      "idx": 201,
+      "emotion": "正面"
+    },
+    {
+      "idx": 203,
+      "emotion": "正面"
+    },
+    {
+      "idx": 205,
+      "emotion": "正面"
+    },
+    {
+      "idx": 207,
+      "emotion": "正面"
+    },
+    {
+      "idx": 209,
+      "emotion": "正面"
+    },
+    {
+      "idx": 212,
+      "emotion": "正面"
+    },
+    {
+      "idx": 214,
+      "emotion": "正面"
+    },
+    {
+      "idx": 216,
+      "emotion": "正面"
+    },
+    {
+      "idx": 218,
+      "emotion": "正面"
+    },
+    {
+      "idx": 220,
+      "emotion": "正面"
+    },
+    {
+      "idx": 222,
+      "emotion": "正面"
+    },
+    {
+      "idx": 224,
+      "emotion": "正面"
+    },
+    {
+      "idx": 226,
+      "emotion": "正面"
+    },
+    {
+      "idx": 228,
+      "emotion": "正面"
+    },
+    {
+      "idx": 230,
+      "emotion": "正面"
+    },
+    {
+      "idx": 232,
+      "emotion": "正面"
+    },
+    {
+      "idx": 234,
+      "emotion": "正面"
+    },
+    {
+      "idx": 236,
+      "emotion": "正面"
+    },
+    {
+      "idx": 238,
+      "emotion": "正面"
+    },
+    {
+      "idx": 239,
+      "emotion": "正面"
+    },
+    {
+      "idx": 241,
+      "emotion": "正面"
+    },
+    {
+      "idx": 242,
+      "emotion": "正面"
+    },
+    {
+      "idx": 244,
+      "emotion": "正面"
+    },
+    {
+      "idx": 246,
+      "emotion": "正面"
+    },
+    {
+      "idx": 248,
+      "emotion": "中性"
+    },
+    {
+      "idx": 249,
+      "emotion": "正面"
+    },
+    {
+      "idx": 251,
+      "emotion": "正面"
+    },
+    {
+      "idx": 253,
+      "emotion": "正面"
+    },
+    {
+      "idx": 255,
+      "emotion": "正面"
+    },
+    {
+      "idx": 256,
+      "emotion": "正面"
+    },
+    {
+      "idx": 258,
+      "emotion": "正面"
+    },
+    {
+      "idx": 260,
+      "emotion": "正面"
+    },
+    {
+      "idx": 262,
+      "emotion": "正面"
+    },
+    {
+      "idx": 264,
+      "emotion": "中性"
+    },
+    {
+      "idx": 266,
+      "emotion": "中性"
+    },
+    {
+      "idx": 268,
+      "emotion": "中性"
+    },
+    {
+      "idx": 270,
+      "emotion": "中性"
+    },
+    {
+      "idx": 272,
+      "emotion": "中性"
+    },
+    {
+      "idx": 274,
+      "emotion": "中性"
+    },
+    {
+      "idx": 276,
+      "emotion": "中性"
+    },
+    {
+      "idx": 278,
+      "emotion": "中性"
+    },
+    {
+      "idx": 280,
+      "emotion": "中性"
+    },
+    {
+      "idx": 282,
+      "emotion": "中性"
+    },
+    {
+      "idx": 285,
+      "emotion": "中性"
+    },
+    {
+      "idx": 287,
+      "emotion": "中性"
+    },
+    {
+      "idx": 289,
+      "emotion": "中性"
+    },
+    {
+      "idx": 291,
+      "emotion": "正面"
+    },
+    {
+      "idx": 293,
+      "emotion": "中性"
+    },
+    {
+      "idx": 295,
+      "emotion": "正面"
+    },
+    {
+      "idx": 299,
+      "emotion": "中性"
+    },
+    {
+      "idx": 304,
+      "emotion": "正面"
+    },
+    {
+      "idx": 306,
+      "emotion": "正面"
+    },
+    {
+      "idx": 307,
+      "emotion": "正面"
+    },
+    {
+      "idx": 309,
+      "emotion": "正面"
+    },
+    {
+      "idx": 311,
+      "emotion": "正面"
+    },
+    {
+      "idx": 313,
+      "emotion": "正面"
+    },
+    {
+      "idx": 315,
+      "emotion": "正面"
+    },
+    {
+      "idx": 316,
+      "emotion": "正面"
+    },
+    {
+      "idx": 318,
+      "emotion": "正面"
+    },
+    {
+      "idx": 320,
+      "emotion": "正面"
+    },
+    {
+      "idx": 321,
+      "emotion": "正面"
+    },
+    {
+      "idx": 323,
+      "emotion": "正面"
+    },
+    {
+      "idx": 324,
+      "emotion": "正面"
+    },
+    {
+      "idx": 326,
+      "emotion": "正面"
+    },
+    {
+      "idx": 328,
+      "emotion": "正面"
+    },
+    {
+      "idx": 330,
+      "emotion": "正面"
+    },
+    {
+      "idx": 332,
+      "emotion": "正面"
+    },
+    {
+      "idx": 335,
+      "emotion": "正面"
+    },
+    {
+      "idx": 337,
+      "emotion": "正面"
+    },
+    {
+      "idx": 339,
+      "emotion": "正面"
+    },
+    {
+      "idx": 341,
+      "emotion": "正面"
+    },
+    {
+      "idx": 342,
+      "emotion": "正面"
+    },
+    {
+      "idx": 345,
+      "emotion": "正面"
+    },
+    {
+      "idx": 346,
+      "emotion": "正面"
+    },
+    {
+      "idx": 350,
+      "emotion": "正面"
+    },
+    {
+      "idx": 352,
+      "emotion": "正面"
+    },
+    {
+      "idx": 353,
+      "emotion": "正面"
+    },
+    {
+      "idx": 355,
+      "emotion": "正面"
+    },
+    {
+      "idx": 357,
+      "emotion": "正面"
+    },
+    {
+      "idx": 359,
+      "emotion": "正面"
+    },
+    {
+      "idx": 361,
+      "emotion": "正面"
+    },
+    {
+      "idx": 363,
+      "emotion": "正面"
+    },
+    {
+      "idx": 365,
+      "emotion": "正面"
+    },
+    {
+      "idx": 367,
+      "emotion": "正面"
+    },
+    {
+      "idx": 369,
+      "emotion": "正面"
+    },
+    {
+      "idx": 371,
+      "emotion": "正面"
+    },
+    {
+      "idx": 376,
+      "emotion": "正面"
+    },
+    {
+      "idx": 378,
+      "emotion": "正面"
+    },
+    {
+      "idx": 380,
+      "emotion": "正面"
+    },
+    {
+      "idx": 382,
+      "emotion": "正面"
+    },
+    {
+      "idx": 384,
+      "emotion": "正面"
+    },
+    {
+      "idx": 386,
+      "emotion": "正面"
+    },
+    {
+      "idx": 388,
+      "emotion": "正面"
+    },
+    {
+      "idx": 390,
+      "emotion": "正面"
+    },
+    {
+      "idx": 392,
+      "emotion": "正面"
+    },
+    {
+      "idx": 394,
+      "emotion": "负面"
+    },
+    {
+      "idx": 396,
+      "emotion": "正面"
+    },
+    {
+      "idx": 398,
+      "emotion": "正面"
+    },
+    {
+      "idx": 400,
+      "emotion": "正面"
+    },
+    {
+      "idx": 402,
+      "emotion": "正面"
+    },
+    {
+      "idx": 403,
+      "emotion": "正面"
+    },
+    {
+      "idx": 405,
+      "emotion": "正面"
+    },
+    {
+      "idx": 407,
+      "emotion": "正面"
+    }
+  ]
+}

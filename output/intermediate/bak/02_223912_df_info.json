@@ -1,0 +1,35 @@
+{
+  "rows": 26733,
+  "columns": [
+    "conv_id",
+    "turn_id",
+    "user_id",
+    "turn_order",
+    "is_seeker",
+    "utc_time",
+    "upvotes",
+    "processed",
+    "raw",
+    "context_processed",
+    "context_raw",
+    "context_turn_ids"
+  ],
+  "dtypes": {
+    "conv_id": "object",
+    "turn_id": "object",
+    "user_id": "object",
+    "turn_order": "int64",
+    "is_seeker": "bool",
+    "utc_time": "int64",
+    "upvotes": "float64",
+    "processed": "object",
+    "raw": "object",
+    "context_processed": "object",
+    "context_raw": "object",
+    "context_turn_ids": "object"
+  },
+  "is_seeker_distribution": {
+    "false": 14142,
+    "true": 12591
+  }
+}

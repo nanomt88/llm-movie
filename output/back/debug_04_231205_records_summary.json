@@ -1,0 +1,324 @@
+{
+  "total_records": 661,
+  "total_unique_ages": 5,
+  "total_unique_genres": 18,
+  "total_unique_holidays": 2,
+  "emotion_distribution": {
+    "快乐": 436,
+    "愤怒": 63,
+    "喜爱": 53,
+    "悲伤": 41,
+    "恐惧": 36,
+    "惊讶": 32
+  },
+  "age_distribution": {
+    "unknown": 559,
+    "36-50": 42,
+    "<18": 27,
+    "18-25": 21,
+    "50+": 12
+  },
+  "holiday_records_count": 661,
+  "samples": [
+    {
+      "age_segment": "18-25",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "喜剧"
+    },
+    {
+      "age_segment": "18-25",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "悬疑"
+    },
+    {
+      "age_segment": "18-25",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "18-25",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "音乐"
+    },
+    {
+      "age_segment": "18-25",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "历史"
+    },
+    {
+      "age_segment": "18-25",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "西部"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "冒险"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "愤怒",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "悲伤",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "喜剧"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "爱情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "愤怒",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "愤怒",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "36-50",
+      "holiday_name": "元旦",
+      "emotion": "悲伤",
+      "genre": "纪录"
+    },
+    {
+      "age_segment": "36-50",
+      "holiday_name": "元旦",
+      "emotion": "喜爱",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "惊悚"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "悬疑"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "家庭"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "冒险"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "科幻"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "动画"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "动作"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "犯罪"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "惊悚"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "科幻"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "动作"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "动作"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "惊悚"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "科幻"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "冒险"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "历史"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "惊悚"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "动作"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "喜剧"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "剧情"
+    },
+    {
+      "age_segment": "unknown",
+      "holiday_name": "元旦",
+      "emotion": "快乐",
+      "genre": "奇幻"
+    }
+  ]
+}
