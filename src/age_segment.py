@@ -309,20 +309,21 @@ def segment_users(data_path: str) -> pd.DataFrame:
     """
     df = pd.read_csv(data_path)
 
-    # defaultdict 是 Python collections 模块中的一个特殊字典类型，list为指定value的类型
+    # defaultdict 是 Python collections 模块中的一个特殊字典类型，set为指定value的类型，set集合可以去重
     # 按 user_id 收集所有 USER 角色的文本
     # 格式为： { user1 : ['Hello']}
-    user_bucket = defaultdict(list)
+    user_bucket = defaultdict(set)
     for _, row in df.iterrows():
         try:
             parts = ast.literal_eval(row['processed'])
             if parts[0] == 'USER':
-                user_bucket[row['user_id']].append(parts[1])
+                user_bucket[row['user_id']].add(parts[1])
         except (ValueError, SyntaxError, TypeError):
             pass
 
     results = []
     for uid, texts in user_bucket.items():
+        texts = list(texts)  # 转换为列表以便后续处理
         # ---- 方法 1: 显式提取 ----
         best_seg = None
         best_source = None
@@ -415,10 +416,10 @@ def write_age_to_file(user_seg: dict, csv_path: str = None):
         log_warn('DataLoader', f'年龄段分布统计失败: {e}')
     path = write_json(user_seg_data, 'user_seg', run_id='totle', step='01')
 
+
 # ------------------------------------------------------------------
 # 年龄段差异对比工具
 # ------------------------------------------------------------------
-
 def compare_age_segments(file1_path: str, file2_path: str, output_csv: str = None) -> pd.DataFrame:
     """
     比较两个 JSON 文件中 age_all 标签下的差异。
@@ -495,8 +496,8 @@ def compare_age_segments(file1_path: str, file2_path: str, output_csv: str = Non
 def main():
     import os
 
-    data_dir = os.path.join(os.path.dirname(__file__), 'data')
-    csv_path = os.path.join(data_dir, 'my-train-data.csv')
+    data_dir = os.path.join(os.path.dirname(__file__), '../data/conv')
+    csv_path = os.path.join(data_dir, 'data_all.csv')
 
     # ---- Demo ----
     print("=" * 60)
@@ -545,8 +546,8 @@ def main():
 # ------------------------------------------------------------------
 if __name__ == '__main__':
     # main()
-    compare_age_segments('../output/intermediate/totle_holiday_S01_user_seg.json', 'output/intermediate/totle_S01_user_seg.json',
-                         'output/intermediate/totle_user_seg_diff.csv')
+    compare_age_segments('../data/conv/totle_user_seg_v3.json', '../output/intermediate/totle_holiday_S01_user_seg.json',
+                         '../output/intermediate/totle_user_seg_diff.csv')
 
     # 输出示例
     # print("\n示例结果 (前 5):")

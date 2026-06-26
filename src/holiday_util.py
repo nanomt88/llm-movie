@@ -6,7 +6,7 @@
 
 import os
 from datetime import date as Date, datetime
-from typing import Optional
+from typing import Optional, Counter
 
 import pandas as pd
 
@@ -224,8 +224,20 @@ def merge_all_holiday_records(input_dir: str = '../data/yearly',
             # 添加节假日标记
             df_tagged = cal.add_holiday_flags(df, col='utc_time')
 
-            # 筛选节假日记录
-            holiday_df = df_tagged[df_tagged['holiday']].copy()
+            # 筛选节假日记录（补充：用户提问在节假日但系统回复不在节假日的记录）
+            # 1) 找出用户提问在节假日的行（锚点）
+            user_on_holiday_mask = df_tagged['is_seeker'] & df_tagged['holiday']
+            # 2) 对每个锚点，补充同会话中在该用户提问之后的系统回复（无论是否节假日）
+            supplemental_mask = pd.Series(False, index=df_tagged.index)
+            for _, u_row in df_tagged[user_on_holiday_mask].iterrows():
+                same_conv_system = (
+                    (df_tagged['conv_id'] == u_row['conv_id'])
+                    & (~df_tagged['is_seeker'])
+                    & (df_tagged['utc_time'] >= u_row['utc_time'])
+                )
+                supplemental_mask = supplemental_mask | same_conv_system
+            # 3) 合并：原始节假日记录 + 补充系统回复，保持原始顺序
+            holiday_df = df_tagged[df_tagged['holiday'] | supplemental_mask].copy()
 
             # 添加来源文件信息
             holiday_df['source_file'] = csv_file
@@ -309,14 +321,164 @@ def main_test():
             print(f"  {r['conv_id']} → {r['holiday_name']} ({r['holiday_type']})")
 
 
+def extract_and_count_regex_pattern(
+    input_file: str = '../data/conv/all_holiday_records.csv',
+    pattern: str = r'tt\d+',
+    output_file: Optional[str] = None
+) -> pd.DataFrame:
+    """
+    从 CSV 文件中提取用户提问（is_seeker=True），统计包含指定正则表达式的条数及占比。
+
+    参数：
+        input_file: 输入 CSV 文件路径
+        pattern: 正则表达式模式，默认为 r'tt\\d+'
+        output_file: 输出文件路径（可选），保存匹配的记录
+
+    返回：
+        DataFrame，包含所有匹配的记录
+    """
+    import re
+
+    # 读取 CSV 文件
+    df = pd.read_csv(input_file, encoding='utf-8-sig')
+
+    # 筛选用户提问（is_seeker=True）
+    user_questions = df[df['is_seeker'] == True].copy()
+    total_user_questions = len(user_questions)
+
+    if total_user_questions == 0:
+        print("警告：未找到任何用户提问记录")
+        return pd.DataFrame()
+
+    # 查找包含指定正则表达式的记录
+    matched_mask = user_questions['processed'].astype(str).str.contains(pattern, regex=True, na=False)
+    matched_records = user_questions[matched_mask].copy()
+    matched_count = len(matched_records)
+
+    # 计算占比
+    match_ratio = matched_count / total_user_questions * 100
+
+    # ---- 去重后统计 ----
+    # 对用户提问的 processed 列进行去重
+    unique_user_questions = user_questions.drop_duplicates(subset=['processed'])
+    total_unique_questions = len(unique_user_questions)
+
+    # 对匹配记录也进行去重
+    unique_matched_records = matched_records.drop_duplicates(subset=['processed'])
+    unique_matched_count = len(unique_matched_records)
+
+    # 计算去重后的占比
+    match_ratio_unique = unique_matched_count / total_unique_questions * 100 if total_unique_questions > 0 else 0
+
+    # ---- 电影名称统计 ----
+    # 提取所有匹配的电影ID
+    all_movie_ids = []
+    movie_id_counter = Counter()
+
+    for _, row in unique_matched_records.iterrows():
+        matches = re.findall(pattern, str(row['processed']))
+        all_movie_ids.extend(matches)
+        movie_id_counter.update(matches)
+
+    total_mentions = len(all_movie_ids)  # 总提及次数
+    unique_movies = len(movie_id_counter)  # 不同电影数量
+
+    # 打印统计信息
+    print(f"{'=' * 60}")
+    print(f"正则表达式匹配统计报告")
+    print(f"{'=' * 60}")
+    print(f"正则表达式模式: {pattern}")
+    print(f"用户提问总数:   {total_user_questions}")
+    print(f"匹配记录数:     {matched_count}")
+    print(f"匹配占比:       {match_ratio:.2f}%")
+    print(f"\n【去重后统计】")
+    print(f"去重后用户提问: {total_unique_questions}")
+    print(f"去重后匹配记录: {unique_matched_count}")
+    print(f"去重后匹配占比: {match_ratio_unique:.2f}%")
+    print(f"\n【电影名称统计】")
+    print(f"用户相同会话去重后，电影提及总次数: {total_mentions}")
+    print(f"用户相同会话去重后，提到不同电影数: {unique_movies}")
+    if unique_movies > 0:
+        avg_mentions_per_movie = total_mentions / unique_movies
+        print(f"平均每部电影提及: {avg_mentions_per_movie:.2f} 次")
+    print(f"{'=' * 60}")
+
+    # 如果提供了输出文件路径，保存匹配的记录
+    if output_file and matched_count > 0:
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        matched_records.to_csv(output_file, index=False, encoding='utf-8-sig')
+        print(f"\n匹配记录已保存到: {output_file}")
+
+    # 展示部分匹配示例
+    if matched_count > 0:
+        print(f"\n匹配示例（前10条）:")
+        print(f"{'Conv ID':<20} {'Processed Text'}")
+        print("-" * 80)
+        for _, row in matched_records.head(10).iterrows():
+            # 提取匹配的字符串
+            matches = re.findall(pattern, str(row['processed']))
+            print(f"{row['conv_id']:<20} {row['processed'][:60]}... [匹配: {', '.join(matches)}]")
+
+    return matched_records
+
+
+def main_test():
+    cal = HolidayCalendar()
+
+    # 示例 1：判断单日
+    print(f"2022-07-04 是节假日？{cal.is_holiday('2022-07-04')} → {cal.get_holiday_names('2022-07-04')}")
+    print(f"2022-07-05 是节假日？{cal.is_holiday('2022-07-05')}")
+
+    # 示例 2：统计节日类型
+    from collections import Counter
+    type_cnt = Counter(h.type for h in cal.all_holidays)
+    print(f"\n节日类型分布: {dict(type_cnt)}")
+
+    # 示例 3：与 extrace.py 的 pd.DataFrame 配合
+    print("\n--- 与 DataFrame 配合（按 is_seeker 过滤用户发言） ---")
+    data_dir = os.path.join(os.path.dirname(__file__), 'data/yearly')
+    csv_candidates = [f for f in os.listdir(data_dir) if f.endswith('.csv') and f != 'holiday.csv']
+    for csv_file in csv_candidates:
+        csv_path = os.path.join(data_dir, csv_file)
+        import sys
+        sys.path.insert(0, os.path.dirname(__file__))
+        from extrace import load_records_pd
+
+        df = load_records_pd(csv_path)
+        df_tagged = cal.add_holiday_flags(df, col='utc_time')
+        print(f"总记录: {len(df_tagged)}, 其中节假日: {df_tagged['holiday'].sum()}")
+        # 展示节假日中的用户发言
+        user_holiday = df_tagged[df_tagged['holiday'] & (df_tagged['is_seeker'] == True)]
+        print(f"用户发言落在节假日的: {len(user_holiday)} 条")
+        for _, r in user_holiday.head(5).iterrows():
+            d = datetime.utcfromtimestamp(int(r['utc_time'])).date()
+            print(f"  {r['conv_id']}  {d} → {cal.get_holiday_names(d)}")
+
+        # 示例 4：直接给 DataFrame 打标签
+        import pandas as pd
+        df = pd.read_csv(os.path.join(data_dir, csv_file))
+        df_tagged = cal.add_holiday_flags(df, col='utc_time')
+        holiday_rows = df_tagged[df_tagged['holiday']]
+        print(f"\n{len(holiday_rows)} 条记录落在节假日")
+        for _, r in holiday_rows.head(5).iterrows():
+            print(f"  {r['conv_id']} → {r['holiday_name']} ({r['holiday_type']})")
+
+
 # ------------------------------------------------------------------
 # 使用示例
 # ------------------------------------------------------------------
 if __name__ == '__main__':
     # 运行合并功能
-    result = merge_all_holiday_records()
+    # result = merge_all_holiday_records()
+    #
+    # # 如果需要查看结果
+    # if result is not None:
+    #     print(f"\n前 5 条记录:")
+    #     print(result[['conv_id', 'utc_time', 'holiday_name', 'source_file']].head())
 
-    # 如果需要查看结果
-    if result is not None:
-        print(f"\n前 5 条记录:")
-        print(result[['conv_id', 'utc_time', 'holiday_name', 'source_file']].head())
+    # 测试正则表达式匹配统计
+    matched_df = extract_and_count_regex_pattern(
+        input_file='../data/conv/all_holiday_records.csv',
+        pattern=r'tt\d+',
+        output_file='../data/conv/matched_tt_records.csv'
+    )
