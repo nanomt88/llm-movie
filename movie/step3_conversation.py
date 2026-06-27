@@ -695,7 +695,8 @@ def dim_e4_per_holiday_vs_workday_weekend_turns(rows: list[dict]):
 #  B: 多轮会话时间分析
 # ═══════════════════════════════════════════════════════════════════════
 
-def _session_time_metrics(rows: list[dict]) -> dict:
+def _session_time_metrics(rows: list[dict],
+                          allow_periods: set[str] | None = None) -> dict:
     """
     Compute time-related metrics for multi-turn sessions.
     计算多轮会话的时间相关指标。
@@ -705,6 +706,8 @@ def _session_time_metrics(rows: list[dict]) -> dict:
       同一会话中，仅统计不同内容的用户提问之间的时间差。
       Sum of time differences (seconds) / number of intervals.
       时间差之和 / 间隔数 = 平均间隔。
+      When allow_periods is set, BOTH questions in an interval pair must have
+      their 'period' in allow_periods（两提问均需在本周期内）。
 
     多轮会话平均持续时间:
       First user question time to last user question time.
@@ -712,11 +715,18 @@ def _session_time_metrics(rows: list[dict]) -> dict:
       Both must be different questions.
       首尾必须是不同的提问内容。
 
+    Args:
+        rows: data rows
+        allow_periods: if set, only count intervals where both questions'
+                       period ∈ allow_periods; duration requires first
+                       question's period ∈ allow_periods
+
     Returns（返回字典）:
         {
             'avg_interval_seconds': float,      # 平均间隔时间（秒）
             'avg_duration_seconds': float,      # 平均持续时间（秒）
-            'valid_sessions': int,              # 有效会话数
+            'valid_interval_sessions': int,     # 有效间隔计数
+            'valid_duration_sessions': int,     # 有效时长计数
         }
     """
     session_questions = _session_user_question_counts(rows)  # 按会话分组的提问
@@ -747,19 +757,29 @@ def _session_time_metrics(rows: list[dict]) -> dict:
         # Sort by time（按时间排序）
         unique_questions.sort(key=lambda x: x['utc_time'])
 
-        # Interval time: consecutive different questions（相邻提问的时间间隔）
-        for i in range(1, len(unique_questions)):
-            t_diff = unique_questions[i]['utc_time'] - unique_questions[i - 1]['utc_time']
-            if t_diff > 0:                     # 仅统计时间差为正的情况
-                total_interval_time += t_diff
-                valid_interval_count += 1
-
         # Duration: first to last (if questions differ)（首尾时间差）
+        # 用户第一次用户提问时间需在本周期内
+        first_period = unique_questions[0].get('period', '')
+        if allow_periods is not None and first_period not in allow_periods:
+            continue
         first_time = unique_questions[0]['utc_time']
         last_time = unique_questions[-1]['utc_time']
         if last_time > first_time:
             total_durations += (last_time - first_time)
             valid_duration_count += 1
+
+        # Interval time: consecutive different questions（相邻提问的时间间隔）
+        # 两提问均需在本周期内
+        for i in range(1, len(unique_questions)):
+            if allow_periods is not None:
+                q_period = unique_questions[i].get('period', '')
+                prev_period = unique_questions[i - 1].get('period', '')
+                if q_period not in allow_periods or prev_period not in allow_periods:
+                    continue
+            t_diff = unique_questions[i]['utc_time'] - unique_questions[i - 1]['utc_time']
+            if t_diff > 0:                     # 仅统计时间差为正的情况
+                total_interval_time += t_diff
+                valid_interval_count += 1
 
     avg_interval = total_interval_time / max(valid_interval_count, 1)  # 平均间隔
     avg_duration = total_durations / max(valid_duration_count, 1)      # 平均时长
@@ -820,8 +840,8 @@ def dim_f1_holiday_vs_nonholiday_time(rows: list[dict]):
     h_rows = [r for r in rows if r['session_id'] in h_sessions]
     nh_rows = [r for r in rows if r['session_id'] in nh_sessions]
 
-    h_time = _session_time_metrics(h_rows)          # 节假日时间指标
-    nh_time = _session_time_metrics(nh_rows)        # 非节假日时间指标
+    h_time = _session_time_metrics(h_rows, allow_periods={'holiday'})          # 节假日时间指标
+    nh_time = _session_time_metrics(nh_rows, allow_periods={'workday', 'weekend'})  # 非节假日时间指标
 
     log(f"  Holiday: avg interval {h_time['avg_interval_seconds']:.0f}s, "
         f"avg duration {h_time['avg_duration_seconds']:.0f}s")
@@ -859,7 +879,7 @@ def dim_f2_holiday_workday_weekend_time(rows: list[dict]):
     for p in ['holiday', 'workday', 'weekend']:
         p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
         p_rows = [r for r in rows if r['session_id'] in p_sessions]
-        stats[p.capitalize()] = _session_time_metrics(p_rows)
+        stats[p.capitalize()] = _session_time_metrics(p_rows, allow_periods={p})
         log(f"  {p}: interval {stats[p.capitalize()]['avg_interval_seconds']:.0f}s")
 
     _plot_time_comparison(
@@ -898,13 +918,13 @@ def dim_f3_per_holiday_vs_nonholiday_time(rows: list[dict]):
     # 非节假日基线
     nh_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
     nh_rows = [r for r in rows if r['session_id'] in nh_sessions]
-    nh_time = _session_time_metrics(nh_rows)
+    nh_time = _session_time_metrics(nh_rows, allow_periods={'workday', 'weekend'})
 
     for name, sids in holiday_name_sessions.items():
         if len(sids) < MIN_DATA_ROWS // 10:        # 数据太少则跳过
             continue
         p_rows = [r for r in rows if r['session_id'] in sids]
-        p_time = _session_time_metrics(p_rows)
+        p_time = _session_time_metrics(p_rows, allow_periods={'holiday'})
         p_time['name'] = name
         p_time['total_sessions'] = len(sids)
         holiday_agg_time.append(p_time)
@@ -964,7 +984,7 @@ def dim_f4_per_holiday_vs_workday_weekend_time(rows: list[dict]):
     for p in ['workday', 'weekend']:
         p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
         p_rows = [r for r in rows if r['session_id'] in p_sessions]
-        baselines[p] = _session_time_metrics(p_rows)
+        baselines[p] = _session_time_metrics(p_rows, allow_periods={p})
         log(f"  {p}: interval {baselines[p]['avg_interval_seconds']:.0f}s, "
             f"duration {baselines[p]['avg_duration_seconds']:.0f}s")
 
@@ -980,7 +1000,7 @@ def dim_f4_per_holiday_vs_workday_weekend_time(rows: list[dict]):
         if len(sids) < MIN_DATA_ROWS // 10:
             continue
         p_rows = [r for r in rows if r['session_id'] in sids]
-        p_time = _session_time_metrics(p_rows)
+        p_time = _session_time_metrics(p_rows, allow_periods={'holiday'})
         p_time['name'] = name
         p_time['total_sessions'] = len(sids)
         holiday_data.append(p_time)
@@ -1059,6 +1079,27 @@ def dim_f4_per_holiday_vs_workday_weekend_time(rows: list[dict]):
 #  C: 单日/跨日会话分析
 # ═══════════════════════════════════════════════════════════════════════
 
+def _count_days_per_period(rows: list[dict]) -> dict[str, int]:
+    """Count unique dates per period (holiday / workday / weekend).
+       统计每个 period 的唯一日期数。"""
+    period_dates = defaultdict(set)
+    for r in rows:
+        if r.get('is_seeker'):
+            period_dates[r['period']].add(r['date'])
+    return {p: len(dates) for p, dates in period_dates.items()}
+
+
+def _count_days_per_holiday_name(rows: list[dict]) -> dict[str, int]:
+    """Count unique dates per holiday name (for per-day averaging).
+       统计每个节假日名称的唯一日期数。"""
+    holiday_dates = defaultdict(set)
+    for r in rows:
+        if r.get('is_seeker') and r['period'] == 'holiday':
+            name = r['holiday_name'][:6]
+            holiday_dates[name].add(r['date'])
+    return {name: len(dates) for name, dates in holiday_dates.items()}
+
+
 def _session_day_classification(rows: list[dict]) -> dict[str, str]:
     """
     Classify sessions as 'single_day' or 'cross_day'.
@@ -1109,9 +1150,14 @@ def _day_session_stats(
 
 
 def _plot_day_session_comparison(
-    stats_dict: dict[str, dict], title: str, filename: str):
+    stats_dict: dict[str, dict], title: str, filename: str,
+    ylabel: str = 'Count',
+):
     """Bar chart comparing single/cross-day stats.
-       柱状图：比较单日/跨日会话统计。"""
+       柱状图：比较单日/跨日会话统计。
+    Args:
+        ylabel: y-axis label (default 'Count', use 'Avg per day' for per-day averages)
+    """
     groups = list(stats_dict.keys())
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
@@ -1122,8 +1168,8 @@ def _plot_day_session_comparison(
     sd_vals = [stats_dict[g]['single_day'] for g in groups]
     ax1.bar(groups, sd_vals, color=colors, alpha=0.8, width=0.5)
     for i, v in enumerate(sd_vals):
-        ax1.text(i, v + 0.5, str(v), ha='center', va='bottom', fontsize=10)
-    ax1.set_ylabel('Count')
+        ax1.text(i, v + 0.5, f'{v:.2f}', ha='center', va='bottom', fontsize=10)
+    ax1.set_ylabel(ylabel)
     ax1.set_title('Single-Day Sessions (2+ turns)')
     ax1.grid(axis='y', alpha=0.3)
 
@@ -1131,8 +1177,8 @@ def _plot_day_session_comparison(
     cd_vals = [stats_dict[g]['cross_day'] for g in groups]
     ax2.bar(groups, cd_vals, color=colors, alpha=0.8, width=0.5)
     for i, v in enumerate(cd_vals):
-        ax2.text(i, v + 0.5, str(v), ha='center', va='bottom', fontsize=10)
-    ax2.set_ylabel('Count')
+        ax2.text(i, v + 0.5, f'{v:.2f}', ha='center', va='bottom', fontsize=10)
+    ax2.set_ylabel(ylabel)
     ax2.set_title('Cross-Day Sessions')
     ax2.grid(axis='y', alpha=0.3)
 
@@ -1144,86 +1190,129 @@ def _plot_day_session_comparison(
     log(f"Saved: {path}")
 
 
-def dim_g1_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
-    """Compare single/cross-day sessions: holiday vs non-holiday.
-       比较节假日 vs 非节假日的单日/跨日会话。"""
+def dim_f5_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
+    """Compare per-day single/cross-day session averages: holiday vs non-holiday.
+        比较节假日 vs 非节假日每天的平均单日/跨日会话数。"""
     log("=" * 50)
-    log("G1: Holiday vs Non-Holiday Single/Cross-Day Sessions")
+    log("F5: Holiday vs Non-Holiday Avg Day Sessions")
 
     session_period = _session_period_series(rows)
     h_sessions = set(sid for sid, p in session_period.items() if p == 'holiday')
     nh_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
 
-    h_stats = _day_session_stats(rows, h_sessions)          # 节假日统计
-    nh_stats = _day_session_stats(rows, nh_sessions)        # 非节假日统计
+    h_stats = _day_session_stats(rows, h_sessions)          # 节假日原始统计
+    nh_stats = _day_session_stats(rows, nh_sessions)        # 非节假日原始统计
 
-    log(f"  Holiday: {h_stats['single_day']} single-day, "
-        f"{h_stats['cross_day']} cross-day")
-    log(f"  Non-holiday: {nh_stats['single_day']} single-day, "
-        f"{nh_stats['cross_day']} cross-day")
+    # Per-day averages（每天平均会话数）
+    day_counts = _count_days_per_period(rows)
+    h_days = day_counts.get('holiday', 1)
+    nh_days = day_counts.get('workday', 0) + day_counts.get('weekend', 1)
+
+    h_single_per_day = h_stats['single_day'] / max(h_days, 1)
+    h_cross_per_day = h_stats['cross_day'] / max(h_days, 1)
+    nh_single_per_day = nh_stats['single_day'] / max(nh_days, 1)
+    nh_cross_per_day = nh_stats['cross_day'] / max(nh_days, 1)
+
+    log(f"  Holiday ({h_days} days): single {h_single_per_day:.2f}/day, "
+        f"cross {h_cross_per_day:.2f}/day")
+    log(f"  Non-holiday ({nh_days} days): single {nh_single_per_day:.2f}/day, "
+        f"cross {nh_cross_per_day:.2f}/day")
+
+    per_day_stats = {
+        'Holiday': {'single_day': h_single_per_day, 'cross_day': h_cross_per_day},
+        'Non-holiday': {'single_day': nh_single_per_day, 'cross_day': nh_cross_per_day},
+    }
 
     _plot_day_session_comparison(
-        {'Holiday': h_stats, 'Non-holiday': nh_stats},
-        'Single-Day & Cross-Day Sessions: Holiday vs Non-Holiday',
-        'g1_holiday_vs_nonholiday_day_sessions.png',
+        per_day_stats,
+        'Avg Single-Day & Cross-Day Sessions per Day: Holiday vs Non-Holiday',
+        'f5_holiday_vs_nonholiday_day_sessions.png',
+        ylabel='Avg per day',
     )
 
     # CSV
-    csv_path = os.path.join(STEP_OUT, 'g1_holiday_vs_nonholiday_day_sessions.csv')
+    csv_path = os.path.join(STEP_OUT, 'f5_holiday_vs_nonholiday_day_sessions.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['group', 'total_sessions', 'single_day', 'cross_day',
+        w.writerow(['group', 'total_days', 'total_sessions', 'single_day',
+                     'cross_day', 'single_per_day', 'cross_per_day',
                      'single_day_ratio', 'cross_day_ratio'])
-        for label, stats in [('holiday', h_stats), ('non_holiday', nh_stats)]:
-            w.writerow([label, stats['total_sessions'], stats['single_day'],
-                        stats['cross_day'], f'{stats["single_day_ratio"]:.1f}%',
+        for label, stats, days, s_pd, c_pd in [
+            ('holiday', h_stats, h_days, h_single_per_day, h_cross_per_day),
+            ('non_holiday', nh_stats, nh_days, nh_single_per_day, nh_cross_per_day),
+        ]:
+            w.writerow([label, days, stats['total_sessions'], stats['single_day'],
+                        stats['cross_day'], f'{s_pd:.2f}', f'{c_pd:.2f}',
+                        f'{stats["single_day_ratio"]:.1f}%',
                         f'{stats["cross_day_ratio"]:.1f}%'])
     log(f"Saved: {csv_path}")
 
 
-def dim_g2_holiday_workday_weekend_day_sessions(rows: list[dict]):
-    """Compare single/cross-day: holiday vs workday vs weekend.
-       比较节假日 vs 工作日 vs 周末的单日/跨日会话。"""
+def dim_f6_holiday_workday_weekend_day_sessions(rows: list[dict]):
+    """Compare per-day single/cross-day session averages: holiday vs workday vs weekend.
+        比较节假日 vs 工作日 vs 周末每天的平均单日/跨日会话数。"""
     log("=" * 50)
-    log("G2: Holiday vs Workday vs Weekend Single/Cross-Day")
+    log("F6: Holiday vs Workday vs Weekend Avg Day Sessions")
 
     session_period = _session_period_series(rows)
-    stats = {}
+    raw_stats = {}
     for p in ['holiday', 'workday', 'weekend']:
         p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
-        stats[p.capitalize()] = _day_session_stats(rows, p_sessions)
-        log(f"  {p}: {stats[p.capitalize()]['single_day']} single-day, "
-            f"{stats[p.capitalize()]['cross_day']} cross-day")
+        raw_stats[p] = _day_session_stats(rows, p_sessions)
+
+    # Per-day averages（每天平均会话数）
+    day_counts = _count_days_per_period(rows)
+    per_day_stats = {}
+    for p in ['holiday', 'workday', 'weekend']:
+        days = day_counts.get(p, 1)
+        s = raw_stats[p]
+        sd_pd = s['single_day'] / max(days, 1)
+        cd_pd = s['cross_day'] / max(days, 1)
+        per_day_stats[p.capitalize()] = {'single_day': sd_pd, 'cross_day': cd_pd}
+        log(f"  {p} ({days} days): single {sd_pd:.2f}/day, cross {cd_pd:.2f}/day")
 
     _plot_day_session_comparison(
-        stats,
-        'Single-Day & Cross-Day Sessions: Holiday vs Workday vs Weekend',
-        'g2_holiday_workday_weekend_day_sessions.png',
+        per_day_stats,
+        'Avg Single-Day & Cross-Day Sessions per Day: Holiday vs Workday vs Weekend',
+        'f6_holiday_workday_weekend_day_sessions.png',
+        ylabel='Avg per day',
     )
 
     # CSV
-    csv_path = os.path.join(STEP_OUT, 'g2_holiday_workday_weekend_day_sessions.csv')
+    csv_path = os.path.join(STEP_OUT, 'f6_holiday_workday_weekend_day_sessions.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['group', 'total_sessions', 'single_day', 'cross_day',
+        w.writerow(['group', 'total_days', 'total_sessions', 'single_day',
+                     'cross_day', 'single_per_day', 'cross_per_day',
                      'single_day_ratio', 'cross_day_ratio'])
         for p in ['holiday', 'workday', 'weekend']:
-            s = stats[p.capitalize()]
-            w.writerow([p, s['total_sessions'], s['single_day'],
-                        s['cross_day'], f'{s["single_day_ratio"]:.1f}%',
+            s = raw_stats[p]
+            days = day_counts.get(p, 1)
+            sd_pd = s['single_day'] / max(days, 1)
+            cd_pd = s['cross_day'] / max(days, 1)
+            w.writerow([p, days, s['total_sessions'], s['single_day'],
+                        s['cross_day'], f'{sd_pd:.2f}', f'{cd_pd:.2f}',
+                        f'{s["single_day_ratio"]:.1f}%',
                         f'{s["cross_day_ratio"]:.1f}%'])
     log(f"Saved: {csv_path}")
 
 
-def dim_g3_per_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
-    """Per-holiday single/cross-day stats vs non-holiday.
-       各节假日单日/跨日统计 vs 非节假日。"""
+def dim_f7_per_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
+    """Per-holiday single/cross-day per-day averages vs non-holiday baseline.
+        各节假日每天平均单日/跨日会话数 vs 非节假日基线。"""
     log("=" * 50)
-    log("G3: Per-Holiday Single/Cross-Day vs Non-Holiday")
+    log("F7: Per-Holiday Avg Day Sessions vs Non-Holiday")
 
     session_period = _session_period_series(rows)
     nh_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
-    nh_stats = _day_session_stats(rows, nh_sessions)              # 非节假日统计
+    nh_stats = _day_session_stats(rows, nh_sessions)
+
+    # 非节假日总天数
+    day_counts = _count_days_per_period(rows)
+    nh_days = day_counts.get('workday', 0) + day_counts.get('weekend', 1)
+
+    # 每个节假日名称的总天数
+    holiday_days = _count_days_per_holiday_name(rows)
 
     # Group holidays by name
     holiday_name_sessions = defaultdict(set)
@@ -1238,91 +1327,210 @@ def dim_g3_per_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
             continue
         stats = _day_session_stats(rows, sids)
         stats['name'] = name
-        stats['num_sessions'] = len(sids)
+        stats['total_sessions'] = len(sids)
+        # Per-day averages
+        h_days = holiday_days.get(name, 1)
+        stats['single_per_day'] = stats['single_day'] / max(h_days, 1)
+        stats['cross_per_day'] = stats['cross_day'] / max(h_days, 1)
         holiday_stats.append(stats)
 
-    holiday_stats.sort(key=lambda x: x['num_sessions'], reverse=True)
+    holiday_stats.sort(key=lambda x: x['total_sessions'], reverse=True)
 
-    log(f"  Non-holiday: {nh_stats['single_day']} single-day, "
-        f"{nh_stats['cross_day']} cross-day")
+    # 非节假日 per-day 基线
+    nh_single_per_day = nh_stats['single_day'] / max(nh_days, 1)
+    nh_cross_per_day = nh_stats['cross_day'] / max(nh_days, 1)
 
-    names = [h['name'] for h in holiday_stats]                   # 名称列表
-    sd_vals = [h['single_day'] for h in holiday_stats]           # 单日会话数
-    cd_vals = [h['cross_day'] for h in holiday_stats]            # 跨日会话数
+    log(f"  Non-holiday ({nh_days} days): single {nh_single_per_day:.2f}/day, "
+        f"cross {nh_cross_per_day:.2f}/day")
 
-    # 左右两张柱状图
+    names = [h['name'] for h in holiday_stats]
+    sd_vals = [h['single_per_day'] for h in holiday_stats]
+    cd_vals = [h['cross_per_day'] for h in holiday_stats]
+
+    # 左右两张柱状图（单位统一为 per-day）
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(max(14, len(names) * 0.6), 5))
     x = np.arange(len(names))
     width = 0.35
 
-    # 左图：单日会话
+    # 左图：单日会话 per-day
     ax1.bar(x, sd_vals, width, label='Holiday', color=COLOR_HOLIDAY, alpha=0.85)
-    ax1.axhline(y=nh_stats['single_day'] / max(nh_stats['total_sessions'], 1) * 100,
+    ax1.axhline(y=nh_single_per_day,
                 color='red', linestyle='--', linewidth=1.5,
-                label=f'Non-holiday ratio ({nh_stats["single_day_ratio"]:.1f}%)')
+                label=f'Non-holiday ({nh_single_per_day:.2f}/day)')
+    for i, v in enumerate(sd_vals):
+        ax1.text(i, v + 0.02 * max(sd_vals) if max(sd_vals) > 0 else v + 0.01,
+                 f'{v:.2f}', ha='center', va='bottom', fontsize=7)
     ax1.set_xticks(x)
     ax1.set_xticklabels(names, rotation=45, ha='right', fontsize=8)
-    ax1.set_ylabel('Count')
-    ax1.set_title('Single-Day Sessions (2+ turns)')
+    ax1.set_ylabel('Avg per day')
+    ax1.set_title('Single-Day Sessions per Day')
     ax1.legend(fontsize=8)
     ax1.grid(axis='y', alpha=0.3)
 
-    # 右图：跨日会话
+    # 右图：跨日会话 per-day
     ax2.bar(x, cd_vals, width, label='Holiday', color=COLOR_HOLIDAY, alpha=0.85)
-    ax2.axhline(y=nh_stats['cross_day'] / max(nh_stats['total_sessions'], 1) * 100,
+    ax2.axhline(y=nh_cross_per_day,
                 color='red', linestyle='--', linewidth=1.5,
-                label=f'Non-holiday ratio ({nh_stats["cross_day_ratio"]:.1f}%)')
+                label=f'Non-holiday ({nh_cross_per_day:.2f}/day)')
+    for i, v in enumerate(cd_vals):
+        ax2.text(i, v + 0.02 * max(cd_vals) if max(cd_vals) > 0 else v + 0.01,
+                 f'{v:.2f}', ha='center', va='bottom', fontsize=7)
     ax2.set_xticks(x)
     ax2.set_xticklabels(names, rotation=45, ha='right', fontsize=8)
-    ax2.set_ylabel('Count')
-    ax2.set_title('Cross-Day Sessions')
+    ax2.set_ylabel('Avg per day')
+    ax2.set_title('Cross-Day Sessions per Day')
     ax2.legend(fontsize=8)
     ax2.grid(axis='y', alpha=0.3)
 
-    fig.suptitle('Per-Holiday Single-Day & Cross-Day Sessions vs Non-Holiday',
+    fig.suptitle('Per-Holiday Single-Day & Cross-Day Sessions per Day vs Non-Holiday',
                  fontsize=12)
     fig.tight_layout()
-    path = os.path.join(STEP_OUT, 'g3_per_holiday_vs_nonholiday_day_sessions.png')
+    path = os.path.join(STEP_OUT, 'f7_per_holiday_vs_nonholiday_day_sessions.png')
     fig.savefig(path)
     plt.close(fig)
     log(f"Saved: {path}")
 
     # CSV
-    csv_path = os.path.join(STEP_OUT, 'g3_per_holiday_vs_nonholiday_day_sessions.csv')
+    csv_path = os.path.join(STEP_OUT, 'f7_per_holiday_vs_nonholiday_day_sessions.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['holiday_name', 'num_sessions', 'single_day',
-                     'cross_day', 'single_day_ratio', 'cross_day_ratio',
-                     'nh_single_ratio', 'nh_cross_ratio'])
+        w.writerow(['holiday_name', 'total_sessions', 'total_days',
+                     'single_day', 'cross_day', 'single_per_day', 'cross_per_day',
+                     'single_day_ratio', 'cross_day_ratio',
+                     'nh_single_per_day', 'nh_cross_per_day'])
         for h in holiday_stats:
-            w.writerow([h['name'], h['num_sessions'], h['single_day'],
-                        h['cross_day'], f'{h["single_day_ratio"]:.1f}%',
+            h_days = holiday_days.get(h['name'], 1)
+            w.writerow([h['name'], h['total_sessions'], h_days,
+                        h['single_day'], h['cross_day'],
+                        f'{h["single_per_day"]:.4f}', f'{h["cross_per_day"]:.4f}',
+                        f'{h["single_day_ratio"]:.1f}%',
                         f'{h["cross_day_ratio"]:.1f}%',
-                        f'{nh_stats["single_day_ratio"]:.1f}%',
-                        f'{nh_stats["cross_day_ratio"]:.1f}%'])
+                        f'{nh_single_per_day:.4f}', f'{nh_cross_per_day:.4f}'])
     log(f"Saved: {csv_path}")
 
 
-def dim_g4_per_holiday_vs_workday_weekend_day_sessions(rows: list[dict]):
-    """Per-holiday single/cross-day vs workday & weekend.
-       各节假日单日/跨日 vs 工作日/周末。"""
+def dim_f8_per_holiday_vs_workday_weekend_day_sessions(rows: list[dict]):
+    """Per-holiday single/cross-day per-day averages vs workday & weekend baselines.
+        各节假日每天平均单日/跨日会话数 vs 工作日/周末基线。"""
     log("=" * 50)
-    log("G4: Per-Holiday Single/Cross-Day vs Workday & Weekend")
+    log("F8: Per-Holiday Avg Day Sessions vs Workday & Weekend")
 
     session_period = _session_period_series(rows)
+
+    # 工作日/周末基线 per-day
+    day_counts = _count_days_per_period(rows)
+    baselines = {}
     for p in ['workday', 'weekend']:
         p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
         p_stats = _day_session_stats(rows, p_sessions)
-        log(f"  {p}: {p_stats['single_day']} single-day, "
-            f"{p_stats['cross_day']} cross-day")
+        p_days = day_counts.get(p, 1)
+        baselines[p] = {
+            'single_per_day': p_stats['single_day'] / max(p_days, 1),
+            'cross_per_day': p_stats['cross_day'] / max(p_days, 1),
+        }
+        log(f"  {p} ({p_days} days): single {baselines[p]['single_per_day']:.2f}/day, "
+            f"cross {baselines[p]['cross_per_day']:.2f}/day")
 
-    log("  (Detailed per-holiday data in CSV)")
+    # 每个节假日名称的总天数
+    holiday_days = _count_days_per_holiday_name(rows)
 
-    csv_path = os.path.join(STEP_OUT, 'g4_per_holiday_vs_workday_weekend_day_sessions.csv')
+    # Group holidays by name
+    holiday_name_sessions = defaultdict(set)
+    for r in rows:
+        if r['is_seeker'] and r['period'] == 'holiday':
+            name = r['holiday_name'][:6]
+            holiday_name_sessions[name].add(r['session_id'])
+
+    holiday_stats = []
+    for name, sids in holiday_name_sessions.items():
+        if len(sids) < MIN_DATA_ROWS // 10:
+            continue
+        stats = _day_session_stats(rows, sids)
+        stats['name'] = name
+        stats['total_sessions'] = len(sids)
+        h_days = holiday_days.get(name, 1)
+        stats['single_per_day'] = stats['single_day'] / max(h_days, 1)
+        stats['cross_per_day'] = stats['cross_day'] / max(h_days, 1)
+        holiday_stats.append(stats)
+
+    if not holiday_stats:
+        log("  No holiday groups")
+        return
+
+    holiday_stats.sort(key=lambda x: x['total_sessions'], reverse=True)
+    names = [h['name'] for h in holiday_stats]
+
+    # 柱状图：各节假日 per-day 均值 vs 工作日/周末基线
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(max(14, len(names) * 0.6), 5))
+    x = np.arange(len(names))
+    width = 0.25
+
+    # 左图：单日会话 per-day
+    sd_vals = [h['single_per_day'] for h in holiday_stats]
+    ax1.bar(x, sd_vals, width, label='Holiday', color=COLOR_HOLIDAY, alpha=0.85)
+    ax1.axhline(y=baselines['workday']['single_per_day'],
+                color=COLOR_WORKDAY, linestyle='--', linewidth=1.5,
+                label=f'Workday ({baselines["workday"]["single_per_day"]:.2f}/day)')
+    ax1.axhline(y=baselines['weekend']['single_per_day'],
+                color=COLOR_WEEKEND, linestyle='--', linewidth=1.5,
+                label=f'Weekend ({baselines["weekend"]["single_per_day"]:.2f}/day)')
+    for i, v in enumerate(sd_vals):
+        ax1.text(i, v + 0.02 * max(sd_vals) if max(sd_vals) > 0 else v + 0.01,
+                 f'{v:.2f}', ha='center', va='bottom', fontsize=7)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(names, rotation=45, ha='right', fontsize=8)
+    ax1.set_ylabel('Avg per day')
+    ax1.set_title('Single-Day Sessions per Day')
+    ax1.legend(fontsize=8)
+    ax1.grid(axis='y', alpha=0.3)
+
+    # 右图：跨日会话 per-day
+    cd_vals = [h['cross_per_day'] for h in holiday_stats]
+    ax2.bar(x, cd_vals, width, label='Holiday', color=COLOR_HOLIDAY, alpha=0.85)
+    ax2.axhline(y=baselines['workday']['cross_per_day'],
+                color=COLOR_WORKDAY, linestyle='--', linewidth=1.5,
+                label=f'Workday ({baselines["workday"]["cross_per_day"]:.2f}/day)')
+    ax2.axhline(y=baselines['weekend']['cross_per_day'],
+                color=COLOR_WEEKEND, linestyle='--', linewidth=1.5,
+                label=f'Weekend ({baselines["weekend"]["cross_per_day"]:.2f}/day)')
+    for i, v in enumerate(cd_vals):
+        ax2.text(i, v + 0.02 * max(cd_vals) if max(cd_vals) > 0 else v + 0.01,
+                 f'{v:.2f}', ha='center', va='bottom', fontsize=7)
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(names, rotation=45, ha='right', fontsize=8)
+    ax2.set_ylabel('Avg per day')
+    ax2.set_title('Cross-Day Sessions per Day')
+    ax2.legend(fontsize=8)
+    ax2.grid(axis='y', alpha=0.3)
+
+    fig.suptitle('Per-Holiday Single-Day & Cross-Day Sessions per Day vs Workday & Weekend',
+                 fontsize=12)
+    fig.tight_layout()
+    path = os.path.join(STEP_OUT, 'f8_per_holiday_vs_workday_weekend_day_sessions.png')
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+    # CSV
+    csv_path = os.path.join(STEP_OUT, 'f8_per_holiday_vs_workday_weekend_day_sessions.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['holiday_name', 'single_day', 'cross_day'])
-    log(f"Saved: {csv_path}")
+        w.writerow(['holiday_name', 'total_sessions', 'total_days',
+                     'single_day', 'cross_day', 'single_per_day', 'cross_per_day',
+                     'single_day_ratio', 'cross_day_ratio',
+                     'workday_single_per_day', 'workday_cross_per_day',
+                     'weekend_single_per_day', 'weekend_cross_per_day'])
+        for h in holiday_stats:
+            h_days = holiday_days.get(h['name'], 1)
+            w.writerow([h['name'], h['total_sessions'], h_days,
+                        h['single_day'], h['cross_day'],
+                        f'{h["single_per_day"]:.4f}', f'{h["cross_per_day"]:.4f}',
+                        f'{h["single_day_ratio"]:.1f}%',
+                        f'{h["cross_day_ratio"]:.1f}%',
+                        f'{baselines["workday"]["single_per_day"]:.4f}',
+                        f'{baselines["workday"]["cross_per_day"]:.4f}',
+                        f'{baselines["weekend"]["single_per_day"]:.4f}',
+                        f'{baselines["weekend"]["cross_per_day"]:.4f}'])
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1340,7 +1548,7 @@ def main():
     data = load_all()
     rows = data['rows']                  # 需要所有行（含系统回复）进行会话分析
 
-    # Section e: Session turn counts（会话轮次分析）
+    # Section e: Session turn counts（会话轮次分析 - 单日多会话平均次数对比）
     log("")
     log("-" * 40)
     log("Section A: Session Turn Analysis")
@@ -1368,19 +1576,19 @@ def main():
     log("")
     dim_f4_per_holiday_vs_workday_weekend_time(rows)             # f4: 各节假日vs工作日/周末
 
-    # Section C: Single-day / Cross-day（单日/跨日会话分析）
+    # Section C: Single-day / Cross-day（单日/跨日会话分析 - 跨日会话平均次数对比）
     log("")
     log("-" * 40)
     log("Section C: Single-Day / Cross-Day Session Analysis")
     log("-" * 40)
     # 跨日会话
-    dim_g1_holiday_vs_nonholiday_day_sessions(rows)              # C1: 节假日vs非节假日
+    dim_f5_holiday_vs_nonholiday_day_sessions(rows)              # C1: 节假日vs非节假日
     log("")
-    dim_g2_holiday_workday_weekend_day_sessions(rows)            # C2: 节假日vs工作日vs周末
+    dim_f6_holiday_workday_weekend_day_sessions(rows)            # C2: 节假日vs工作日vs周末
     log("")
-    dim_g3_per_holiday_vs_nonholiday_day_sessions(rows)          # C3: 各节假日vs非节假日
+    dim_f7_per_holiday_vs_nonholiday_day_sessions(rows)          # C3: 各节假日vs非节假日
     log("")
-    dim_g4_per_holiday_vs_workday_weekend_day_sessions(rows)     # C4: 各节假日vs工作日/周末
+    dim_f8_per_holiday_vs_workday_weekend_day_sessions(rows)     # C4: 各节假日vs工作日/周末
 
     log("")
     log("=" * 60)
