@@ -55,7 +55,7 @@ GENRE_COLORS = [
 
 # Top N genres to show
 # 显示前 N 个最热门的影片类型
-TOP_N_GENRES = 15
+TOP_N_GENRES = 20
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -302,13 +302,16 @@ def dim_j2_holiday_workday_weekend_genre(seeker_genres: list[dict]):
 
 
 def dim_j3_per_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
-    """Per-holiday genre distribution vs non-holiday baseline.
-    每个节假日的电影类型分布 vs 非节假日基线。"""
+    """Per-holiday genre distribution vs non-holiday baseline (HEATMAP).
+    每个节假日的电影类型分布热力图 vs 非节假日基线。"""
     log("=" * 50)  # 日志：分隔线
-    log("J3: Per-Holiday Genre Distribution vs Non-Holiday")  # 日志：分析标题
+    log("J3: Per-Holiday Genre Distribution vs Non-Holiday (Heatmap)")  # 日志：分析标题
 
     non_holiday_dates = set(r['date'] for r in seeker_genres if r['period'] != 'holiday')  # 非节假日日期集合
-    nh_genre = _genre_mention_counts(seeker_genres, non_holiday_dates)  # 非节假日各类型提及次数基线
+    # 计算非节假日基线（日均）
+    num_nh_dates = len(non_holiday_dates)
+    nh_genre = _genre_mention_counts(seeker_genres, non_holiday_dates)
+    nh_avg = {g: c / max(num_nh_dates, 1) for g, c in nh_genre.items()}
 
     holiday_groups = defaultdict(list)  # 按节假日名称分组
     for r in seeker_genres:  # 遍历所有带类型信息的记录
@@ -325,79 +328,152 @@ def dim_j3_per_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
     names = sorted(holiday_groups.keys())  # 排序后的节假日名称列表
 
     # Find top genres globally
-    # 找出全局最热门的类型
-    all_genre_totals: Counter = Counter()  # 全局计数器
-    for r in seeker_genres:  # 遍历所有记录
-        for g in r.get('genres', {'unknown'}):  # 遍历每条记录的每个类型
-            all_genre_totals[g] += 1  # 全局计数加 1
-    top_genres = [g for g, _ in all_genre_totals.most_common(TOP_N_GENRES)]  # 取前 N 个
+    all_genre_totals: Counter = Counter()
+    for r in seeker_genres:
+        for g in r.get('genres', {'unknown'}):
+            all_genre_totals[g] += 1
+    top_genres = [g for g, _ in all_genre_totals.most_common(TOP_N_GENRES)]
 
-    # Per-holiday horizontal stacked bar showing genre proportion
-    # 每个节假日的水平堆叠柱状图，显示类型比例
-    fig, ax = plt.subplots(figsize=(max(12, len(names) * 0.3), max(5, len(names) * 0.5)))  # 创建图表
-    y = np.arange(len(names))  # y 轴位置：每个节假日一个位置
-    bottom = np.zeros(len(names))  # 堆叠基线初始化为全零
+    # Build matrix: rows=holidays, cols=genres, value = (holiday_avg_daily - non_holiday_avg_daily)
+    matrix = np.zeros((len(names), len(top_genres)))
+    for i, name in enumerate(names):
+        group_dates = set(r['date'] for r in holiday_groups[name])
+        num_dates = max(len(group_dates), 1)
+        gc = _genre_mention_counts(holiday_groups[name], group_dates)
+        for j, g in enumerate(top_genres):
+            h_avg = gc.get(g, 0) / num_dates
+            matrix[i, j] = h_avg - nh_avg.get(g, 0)
 
-    for i, g in enumerate(top_genres):  # 遍历每个热门类型
-        vals = []  # 存储该类型在各节假日的提及次数
-        for name in names:  # 遍历每个节假日
-            group_dates = set(r['date'] for r in holiday_groups[name])  # 获取该节假日的日期集合
-            genre_counts = _genre_mention_counts(holiday_groups[name], group_dates)  # 计算类型提及次数
-            vals.append(genre_counts.get(g, 0))  # 获取该类型的次数
-        ax.barh(y, vals, left=bottom, label=g,  # 水平堆叠柱状图
-                color=GENRE_COLORS[i % len(GENRE_COLORS)], alpha=0.8)  # 依次分配颜色
-        bottom += vals  # 更新堆叠基线
+    # Heatmap
+    fig, ax = plt.subplots(figsize=(max(14, len(top_genres) * 0.55), max(6, len(names) * 0.4 + 2)))
+    vmax = max(abs(matrix.min()), abs(matrix.max()), 0.01)
+    im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
 
-    ax.set_yticks(y)  # 设置 y 轴刻度位置
-    ax.set_yticklabels(names, fontsize=9)  # 设置 y 轴标签（节假日名称）
-    ax.set_xlabel('Mention Count')  # x 轴标签：提及次数
-    ax.set_title('Per-Holiday Genre Distribution', fontsize=12)  # 图表标题
-    ax.legend(fontsize=7, ncol=2)  # 图例，两列排列
-    ax.grid(axis='x', alpha=0.3)  # x 方向网格线
+    ax.set_xticks(range(len(top_genres)))
+    ax.set_xticklabels(top_genres, rotation=45, ha='right', fontsize=8)
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels(names, fontsize=8)
+    ax.set_xlabel('Genre')
+    ax.set_title('Per-Holiday Genre Distribution: Difference from Non-Holiday Baseline\n(Red=more on holiday, Blue=less)',
+                 fontsize=11)
+    fig.colorbar(im, ax=ax, shrink=0.6, label='Avg Daily Mention Diff')
 
-    fig.tight_layout()  # 自动调整布局
-    path = os.path.join(STEP_OUT, 'j3_per_holiday_vs_nonholiday_genre.png')  # 输出文件路径
-    fig.savefig(path)  # 保存图片
-    plt.close(fig)  # 关闭图形
-    log(f"Saved: {path}")  # 日志记录保存信息
+    fig.tight_layout()
+    path = os.path.join(STEP_OUT, 'j3_per_holiday_vs_nonholiday_genre.png')
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
 
-    # CSV: per-holiday genre counts + non-holiday baseline
-    # CSV 输出：每个节假日的类型提及次数 + 非节假日基线
-    csv_path = os.path.join(STEP_OUT, 'j3_per_holiday_vs_nonholiday_genre.csv')  # CSV 文件路径
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:  # 写入 CSV
-        w = csv.writer(f)  # 创建 CSV 写入器
-        header = ['holiday_name'] + top_genres + ['total']  # 表头：节假日名称 + 各类型 + 总计
-        w.writerow(header)  # 写入表头
-        for name in names:  # 遍历每个节假日
-            group_dates = set(r['date'] for r in holiday_groups[name])  # 获取日期集合
-            gc = _genre_mention_counts(holiday_groups[name], group_dates)  # 计算类型提及次数
-            row = [name] + [gc.get(g, 0) for g in top_genres]  # 构建数据行
-            row.append(sum(gc.get(g, 0) for g in top_genres))  # 添加总计
-            w.writerow(row)  # 写入行
-        # Non-holiday baseline
-        # 非节假日基线行
-        row = ['non_holiday_baseline'] + [nh_genre.get(g, 0) for g in top_genres]  # 基线数据行
-        row.append(sum(nh_genre.get(g, 0) for g in top_genres))  # 添加总计
-        w.writerow(row)  # 写入行
-    log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
+    # CSV
+    csv_path = os.path.join(STEP_OUT, 'j3_per_holiday_vs_nonholiday_genre.csv')
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        header = ['holiday_name'] + top_genres + ['total']
+        w.writerow(header)
+        for name in names:
+            group_dates = set(r['date'] for r in holiday_groups[name])
+            gc = _genre_mention_counts(holiday_groups[name], group_dates)
+            row = [name] + [gc.get(g, 0) for g in top_genres]
+            row.append(sum(gc.get(g, 0) for g in top_genres))
+            w.writerow(row)
+        row = ['non_holiday_baseline'] + [nh_genre.get(g, 0) for g in top_genres]
+        row.append(sum(nh_genre.get(g, 0) for g in top_genres))
+        w.writerow(row)
+    log(f"Saved: {csv_path}")
 
 
 def dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres: list[dict]):
-    """Per-holiday genre vs workday & weekend (summary).
-    每个节假日的类型提及次数 vs 工作日和周末（汇总）。"""
+    """Per-holiday genre avg daily mention vs workday & weekend baselines.
+    每个节假日的类型日均推荐次数 vs 工作日和周末基线对比。"""
     log("=" * 50)  # 日志：分隔线
-    log("J4: Per-Holiday Genre vs Workday & Weekend")  # 日志：分析标题
-    for p in ['workday', 'weekend']:  # 遍历工作日和周末
-        p_dates = set(r['date'] for r in seeker_genres if r['period'] == p)  # 获取日期集合
-        p_genre = _genre_mention_counts(seeker_genres, p_dates)  # 计算类型提及次数
-        total = sum(p_genre.values())  # 计算总提及次数
-        log(f"  {p}: {total} total genre mentions")  # 日志输出
+    log("J4: Per-Holiday Genre Avg Daily vs Workday & Weekend")  # 日志：分析标题
 
-    csv_path = os.path.join(STEP_OUT, 'j4_per_holiday_vs_workday_weekend_genre.csv')  # CSV 文件路径
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:  # 写入 CSV
-        w = csv.writer(f)  # 创建 CSV 写入器
-        w.writerow(['holiday_name', 'genre', 'count', 'workday_count', 'weekend_count'])  # 写入表头
-    log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
+    # 计算工作日和周末基线（日均）
+    workday_dates = set(r['date'] for r in seeker_genres if r['period'] == 'workday')
+    weekend_dates = set(r['date'] for r in seeker_genres if r['period'] == 'weekend')
+    wd_genre = _genre_mention_counts(seeker_genres, workday_dates)
+    we_genre = _genre_mention_counts(seeker_genres, weekend_dates)
+    num_wd = max(len(workday_dates), 1)
+    num_we = max(len(weekend_dates), 1)
+
+    log(f"  Workday: {sum(wd_genre.values())} total genre mentions from {len(workday_dates)} days")
+    log(f"  Weekend: {sum(we_genre.values())} total genre mentions from {len(weekend_dates)} days")
+
+    # 按节假日名称分组
+    holiday_groups = defaultdict(list)
+    for r in seeker_genres:
+        if r['period'] == 'holiday':
+            name = r['holiday_name'][:6]
+            holiday_groups[name].append(r)
+    holiday_groups = {k: v for k, v in holiday_groups.items() if len(v) >= MIN_DATA_ROWS}
+    if not holiday_groups:
+        log("  No holiday groups")
+        return
+
+    names = sorted(holiday_groups.keys())
+
+    # 计算每个节假日每个类型的日均次数
+    all_genre_totals: Counter = Counter()
+    for r in seeker_genres:
+        for g in r.get('genres', {'unknown'}):
+            all_genre_totals[g] += 1
+    top_genres = [g for g, _ in all_genre_totals.most_common(TOP_N_GENRES)]
+
+    # Heatmap: rows=holidays, cols=genres, value = holiday_avg - workday_baseline
+    matrix_wd = np.zeros((len(names), len(top_genres)))
+    matrix_we = np.zeros((len(names), len(top_genres)))
+    for i, name in enumerate(names):
+        group_dates = set(r['date'] for r in holiday_groups[name])
+        num_dates = max(len(group_dates), 1)
+        gc = _genre_mention_counts(holiday_groups[name], group_dates)
+        for j, g in enumerate(top_genres):
+            h_avg = gc.get(g, 0) / num_dates
+            matrix_wd[i, j] = h_avg - (wd_genre.get(g, 0) / num_wd)
+            matrix_we[i, j] = h_avg - (we_genre.get(g, 0) / num_we)
+
+    # 双热力图：上=vs Workday, 下=vs Weekend
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(max(14, len(top_genres) * 0.55),
+                                                    max(8, len(names) * 0.7 + 2)))
+
+    vmax1 = max(abs(matrix_wd.min()), abs(matrix_wd.max()), 0.01)
+    im1 = ax1.imshow(matrix_wd, cmap='RdBu_r', aspect='auto', vmin=-vmax1, vmax=vmax1)
+    ax1.set_xticks(range(len(top_genres)))
+    ax1.set_xticklabels(top_genres, rotation=45, ha='right', fontsize=7)
+    ax1.set_yticks(range(len(names)))
+    ax1.set_yticklabels(names, fontsize=7)
+    ax1.set_title('Diff: Holiday Avg Daily - Workday Baseline', fontsize=10)
+    fig.colorbar(im1, ax=ax1, shrink=0.5, label='Diff')
+
+    vmax2 = max(abs(matrix_we.min()), abs(matrix_we.max()), 0.01)
+    im2 = ax2.imshow(matrix_we, cmap='RdBu_r', aspect='auto', vmin=-vmax2, vmax=vmax2)
+    ax2.set_xticks(range(len(top_genres)))
+    ax2.set_xticklabels(top_genres, rotation=45, ha='right', fontsize=7)
+    ax2.set_yticks(range(len(names)))
+    ax2.set_yticklabels(names, fontsize=7)
+    ax2.set_xlabel('Genre')
+    ax2.set_title('Diff: Holiday Avg Daily - Weekend Baseline', fontsize=10)
+    fig.colorbar(im2, ax=ax2, shrink=0.5, label='Diff')
+
+    fig.suptitle('Per-Holiday Genre Avg Daily Mentions: Difference from Workday & Weekend', fontsize=12)
+    fig.tight_layout()
+    path = os.path.join(STEP_OUT, 'j4_per_holiday_vs_workday_weekend_genre.png')
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+    # CSV
+    csv_path = os.path.join(STEP_OUT, 'j4_per_holiday_vs_workday_weekend_genre.csv')
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['holiday_name'] + top_genres + ['workday_avg', 'weekend_avg'])
+        for i, name in enumerate(names):
+            group_dates = set(r['date'] for r in holiday_groups[name])
+            gc = _genre_mention_counts(holiday_groups[name], group_dates)
+            row = [name] + [gc.get(g, 0) for g in top_genres]
+            row.append(f'{sum(wd_genre.values()) / num_wd:.2f}')
+            row.append(f'{sum(we_genre.values()) / num_we:.2f}')
+            w.writerow(row)
+    log(f"Saved: {csv_path}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -557,12 +633,12 @@ def dim_k3_per_holiday_hourly_genre(seeker_genres: list[dict]):
     names = sorted(holiday_groups.keys())  # 排序后的节假日名称列表
 
     # Top 6 genres for heatmaps
-    # 取前 6 个热门类型生成热力图
+    # 取前 TOP_N_GENRES 个热门类型生成热力图
     all_genre_totals: Counter = Counter()  # 全局计数器
     for r in seeker_genres:  # 遍历所有记录
         for g in r.get('genres', {'unknown'}):  # 遍历每个类型
             all_genre_totals[g] += 1  # 计数
-    top_genres = [g for g, _ in all_genre_totals.most_common(6)]  # 取前 6 个
+    top_genres = [g for g, _ in all_genre_totals.most_common(TOP_N_GENRES)]  # 取前 TOP_N_GENRES 个
 
     for g in top_genres:  # 对每个热门类型生成一张热力图
         matrix = np.zeros((len(names), 24))  # 创建矩阵：行=节假日数，列=24 小时
@@ -609,22 +685,96 @@ def dim_k3_per_holiday_hourly_genre(seeker_genres: list[dict]):
 
 def dim_k4_per_holiday_hourly_genre_vs_workday_weekend(
     seeker_genres: list[dict]):
-    """Per-holiday hourly genre vs workday & weekend (summary CSV).
-    每个节假日的逐小时类型数据 vs 工作日和周末（汇总 CSV）。"""
+    """Per-holiday hourly genre vs workday & weekend (heatmap).
+    每个节假日的逐小时类型数据 vs 工作日和周末（热力图）。"""
     log("=" * 50)  # 日志：分隔线
     log("K4: Per-Holiday Hourly Genre vs Workday & Weekend")  # 日志：分析标题
-    for p in ['workday', 'weekend']:  # 遍历工作日和周末
-        p_dates = set(r['date'] for r in seeker_genres if r['period'] == p)  # 获取日期集合
-        p_hourly = _genre_hourly_mention_counts(seeker_genres, p_dates)  # 计算逐小时类型数据
-        total = sum(sum(v) for v in p_hourly.values())  # 计算所有类型的总提及次数
-        log(f"  {p}: {total:.0f} avg hourly genre mentions")  # 日志输出
 
-    csv_path = os.path.join(STEP_OUT, 'k4_per_holiday_hourly_genre_vs_workday_weekend.csv')  # CSV 文件路径
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:  # 写入 CSV
-        w = csv.writer(f)  # 创建 CSV 写入器
-        w.writerow(['holiday_name', 'genre', 'hour',  # 写入表头
-                     'holiday_avg', 'workday_avg', 'weekend_avg'])
-    log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
+    # 计算工作日和周末基线的逐小时数据
+    workday_dates = set(r['date'] for r in seeker_genres if r['period'] == 'workday')
+    weekend_dates = set(r['date'] for r in seeker_genres if r['period'] == 'weekend')
+    wd_hourly = _genre_hourly_mention_counts(seeker_genres, workday_dates)
+    we_hourly = _genre_hourly_mention_counts(seeker_genres, weekend_dates)
+
+    for p, ph in [('workday', wd_hourly), ('weekend', we_hourly)]:
+        total = sum(sum(v) for v in ph.values())
+        log(f"  {p}: {total:.2f} avg hourly genre mentions")
+
+    # 按节假日名称分组
+    holiday_groups = defaultdict(list)
+    for r in seeker_genres:
+        if r['period'] == 'holiday':
+            name = r['holiday_name'][:6]
+            holiday_groups[name].append(r)
+    holiday_groups = {k: v for k, v in holiday_groups.items() if len(v) >= MIN_DATA_ROWS}
+    if not holiday_groups:
+        log("  No holiday groups")
+        return
+
+    names = sorted(holiday_groups.keys())
+
+    # Top genres
+    all_genre_totals: Counter = Counter()
+    for r in seeker_genres:
+        for g in r.get('genres', {'unknown'}):
+            all_genre_totals[g] += 1
+    top_genres = [g for g, _ in all_genre_totals.most_common(6)]  # 取前 6 个做热力图（太多难以阅读）
+
+    for g in top_genres:
+        # Matrix: rows=holidays, cols=24 hours, value = holiday_avg - workday_baseline
+        matrix_wd = np.zeros((len(names), 24))
+        matrix_we = np.zeros((len(names), 24))
+        for i, name in enumerate(names):
+            group_dates = set(r['date'] for r in holiday_groups[name])
+            h_hourly = _genre_hourly_mention_counts(holiday_groups[name], group_dates)
+            for h in range(24):
+                matrix_wd[i, h] = h_hourly.get(g, [0.0]*24)[h] - wd_hourly.get(g, [0.0]*24)[h]
+                matrix_we[i, h] = h_hourly.get(g, [0.0]*24)[h] - we_hourly.get(g, [0.0]*24)[h]
+
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, max(6, len(names) * 0.6 + 2)))
+
+        vmax1 = max(abs(matrix_wd.min()), abs(matrix_wd.max()), 0.01)
+        im1 = ax1.imshow(matrix_wd, cmap='RdBu_r', aspect='auto', vmin=-vmax1, vmax=vmax1)
+        ax1.set_xticks(range(24))
+        ax1.set_xticklabels(range(24), fontsize=7)
+        ax1.set_yticks(range(len(names)))
+        ax1.set_yticklabels(names, fontsize=7)
+        ax1.set_title(f'Genre "{g}" — Diff: Holiday - Workday Baseline', fontsize=10)
+        fig.colorbar(im1, ax=ax1, shrink=0.5, label='Diff')
+
+        vmax2 = max(abs(matrix_we.min()), abs(matrix_we.max()), 0.01)
+        im2 = ax2.imshow(matrix_we, cmap='RdBu_r', aspect='auto', vmin=-vmax2, vmax=vmax2)
+        ax2.set_xticks(range(24))
+        ax2.set_xticklabels(range(24), fontsize=7)
+        ax2.set_yticks(range(len(names)))
+        ax2.set_yticklabels(names, fontsize=7)
+        ax2.set_xlabel('Hour of Day (UTC)')
+        ax2.set_title(f'Genre "{g}" — Diff: Holiday - Weekend Baseline', fontsize=10)
+        fig.colorbar(im2, ax=ax2, shrink=0.5, label='Diff')
+
+        fig.suptitle(f'Per-Holiday Hourly Genre: "{g}" — Difference from Workday & Weekend', fontsize=12)
+        fig.tight_layout()
+        safe_g = g.replace(' ', '_').replace('/', '_')[:10]
+        path = os.path.join(STEP_OUT, f'k4_genre_{safe_g}_hourly_heatmap.png')
+        fig.savefig(path)
+        plt.close(fig)
+        log(f"Saved: {path}")
+
+    # CSV
+    csv_path = os.path.join(STEP_OUT, 'k4_per_holiday_hourly_genre_vs_workday_weekend.csv')
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['holiday_name', 'genre', 'hour', 'holiday_avg', 'workday_avg', 'weekend_avg'])
+        for name in names:
+            group_dates = set(r['date'] for r in holiday_groups[name])
+            h_hourly = _genre_hourly_mention_counts(holiday_groups[name], group_dates)
+            for g in top_genres:
+                for h in range(24):
+                    w.writerow([name, g, h,
+                                f'{h_hourly.get(g, [0.0]*24)[h]:.4f}',
+                                f'{wd_hourly.get(g, [0.0]*24)[h]:.4f}',
+                                f'{we_hourly.get(g, [0.0]*24)[h]:.4f}'])
+    log(f"Saved: {csv_path}")
 
 
 # ═══════════════════════════════════════════════════════════════════════

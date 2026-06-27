@@ -116,59 +116,78 @@ def _grouped_daily_questions(seekers: list[dict]) -> dict:
 
 def dim_a1_holiday_vs_nonholiday_pie(seekers: list[dict]):
     """
-    Pie chart: average daily question count for holiday vs non-holiday.
-    饼图：节假日 vs 非节假日 日均提问数对比。
+    Two independent bar charts: left=holiday vs non-holiday, right=holiday vs workday vs weekend.
+    两个独立柱状图：左侧=节假日 vs 非节假日，右侧=节假日 vs 工作日 vs 周末 日均提问数对比。
     Args:
         seekers: 提问者数据行列表
     """
     log("=" * 50)
-    log("A1: Holiday vs Non-holiday Avg Daily Questions (Pie)")
+    log("A1: Holiday vs Non-Holiday vs Workday vs Weekend Avg Daily Questions (Bar)")
 
-    # 收集节假日和非节假日的日期集合
+    # 收集各组日期集合
     holiday_dates = set(r['date'] for r in seekers if r['period'] == 'holiday')
     non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
+    workday_dates = set(r['date'] for r in seekers if r['period'] == 'workday')
+    weekend_dates = set(r['date'] for r in seekers if r['period'] == 'weekend')
 
-    # 计算两组的日均提问数
-    h_avg = _avg_daily_questions(seekers, holiday_dates)          # 节假日日均
-    nh_avg = _avg_daily_questions(seekers, non_holiday_dates)    # 非节假日日均
+    # 计算各组日均提问数
+    h_avg = _avg_daily_questions(seekers, holiday_dates)
+    nh_avg = _avg_daily_questions(seekers, non_holiday_dates)
+    wd_avg = _avg_daily_questions(seekers, workday_dates)
+    we_avg = _avg_daily_questions(seekers, weekend_dates)
 
     log(f"  Holiday avg daily: {h_avg:.1f} (from {len(holiday_dates)} days)")
     log(f"  Non-holiday avg daily: {nh_avg:.1f} (from {len(non_holiday_dates)} days)")
+    log(f"  Workday avg daily: {wd_avg:.1f} (from {len(workday_dates)} days)")
+    log(f"  Weekend avg daily: {we_avg:.1f} (from {len(weekend_dates)} days)")
 
-    if h_avg == 0 and nh_avg == 0:  # 数据全为0时跳过绘图
-        log("  WARN: No data for pie chart")
-        return
+    # 两个独立柱状图：左=节假日 vs 非节假日，右=节假日 vs 工作日 vs 周末
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
-    # 创建饼图：7x7 英寸
-    fig, ax = plt.subplots(figsize=(7, 7))
-    labels = [f'Holiday\n({h_avg:.1f}/day)', f'Non-holiday\n({nh_avg:.1f}/day)']  # 扇区标签
-    sizes = [h_avg, nh_avg]        # 扇区大小
-    colors = [COLOR_HOLIDAY, COLOR_NONHOLIDAY]  # 扇区颜色
-    explode = (0.05, 0)            # 第一个扇区（节假日）外凸 0.05 半径
+    # 左图：Holiday vs Non-holiday
+    groups_2 = ['Holiday', 'Non-holiday']
+    vals_2 = [h_avg, nh_avg]
+    colors_2 = [COLOR_HOLIDAY, COLOR_NONHOLIDAY]
+    bars1 = ax1.bar(groups_2, vals_2, color=colors_2, alpha=0.8, width=0.5,
+                    edgecolor='white', linewidth=0.5)
+    for bar, v in zip(bars1, vals_2):
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                 f'{v:.1f}', ha='center', va='bottom', fontsize=11)
+    ax1.set_ylabel('Avg Daily Questions')
+    ax1.set_title('Holiday vs Non-Holiday', fontsize=12)
+    ax1.grid(axis='y', alpha=0.3)
+    ax1.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
 
-    # 绘制饼图：autopct 显示百分比，startangle=90 从12点钟方向开始
-    wedges, texts, autotexts = ax.pie(
-        sizes, labels=labels, autopct='%1.1f%%',
-        colors=colors, explode=explode, startangle=90,
-        textprops={'fontsize': 11},
-    )
-    for at in autotexts:           # 设置百分比文本字体大小
-        at.set_fontsize(10)
-    ax.set_title('Average Daily Questions: Holiday vs Non-Holiday', fontsize=13)
+    # 右图：Holiday vs Workday vs Weekend
+    groups_3 = ['Holiday', 'Workday', 'Weekend']
+    vals_3 = [h_avg, wd_avg, we_avg]
+    colors_3 = [COLOR_HOLIDAY, COLOR_WORKDAY, COLOR_WEEKEND]
+    bars2 = ax2.bar(groups_3, vals_3, color=colors_3, alpha=0.8, width=0.5,
+                    edgecolor='white', linewidth=0.5)
+    for bar, v in zip(bars2, vals_3):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                 f'{v:.1f}', ha='center', va='bottom', fontsize=11)
+    ax2.set_ylabel('Avg Daily Questions')
+    ax2.set_title('Holiday vs Workday vs Weekend', fontsize=12)
+    ax2.grid(axis='y', alpha=0.3)
+    ax2.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
 
-    fig.tight_layout()             # 自动调整布局，避免标签被裁剪
-    path = os.path.join(STEP_OUT, 'a1_holiday_vs_nonholiday_pie.png')  # 保存路径
-    fig.savefig(path)              # 保存 PNG 图片
-    plt.close(fig)                 # 关闭图表释放内存
+    fig.suptitle('Average Daily Questions by Period', fontsize=13)
+    fig.tight_layout()
+    path = os.path.join(STEP_OUT, 'a1_holiday_vs_nonholiday_bar.png')
+    fig.savefig(path)
+    plt.close(fig)
     log(f"Saved: {path}")
 
     # CSV（保存数值结果）
     csv_path = os.path.join(STEP_OUT, 'a1_holiday_vs_nonholiday.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['group', 'avg_daily_questions', 'num_days'])  # 表头：组名、日均提问数、天数
+        w.writerow(['group', 'avg_daily_questions', 'num_days'])
         w.writerow(['holiday', f'{h_avg:.2f}', len(holiday_dates)])
         w.writerow(['non_holiday', f'{nh_avg:.2f}', len(non_holiday_dates)])
+        w.writerow(['workday', f'{wd_avg:.2f}', len(workday_dates)])
+        w.writerow(['weekend', f'{we_avg:.2f}', len(weekend_dates)])
     log(f"Saved: {csv_path}")
 
 
@@ -179,56 +198,25 @@ def dim_a1_holiday_vs_nonholiday_pie(seekers: list[dict]):
 
 def dim_a2_holiday_workday_weekend_pie(seekers: list[dict]):
     """
-    Pie chart: average daily question count for holiday vs workday vs weekend.
-    饼图：节假日 vs 工作日 vs 周末 日均提问数对比。
+    Merged into A1 bar chart (a1_holiday_vs_nonholiday_bar.png).
+    This function is kept for compatibility — data is now included in dim_a1's merged chart.
     Args:
         seekers: 提问者数据行列表
     """
     log("=" * 50)
-    log("A2: Holiday vs Workday vs Weekend Avg Daily Questions (Pie)")
+    log("A2: (merged into A1 bar chart — see a1_holiday_vs_nonholiday_bar.png)")
 
     # 按三个时段分别收集日期集合
     period_dates = {}
     for p in ['holiday', 'workday', 'weekend']:
         period_dates[p] = set(r['date'] for r in seekers if r['period'] == p)
 
-    # 计算各时段日均提问数
     avgs = {}
     for p in ['holiday', 'workday', 'weekend']:
         avgs[p] = _avg_daily_questions(seekers, period_dates[p])
         log(f"  {p} avg daily: {avgs[p]:.1f} (from {len(period_dates[p])} days)")
 
-    if all(v == 0 for v in avgs.values()):  # 全部为0时跳过
-        log("  WARN: No data")
-        return
-
-    # 创建饼图
-    fig, ax = plt.subplots(figsize=(7, 7))
-    labels = [
-        f'Holiday\n({avgs["holiday"]:.1f}/day)',
-        f'Workday\n({avgs["workday"]:.1f}/day)',
-        f'Weekend\n({avgs["weekend"]:.1f}/day)',
-    ]
-    sizes = [avgs['holiday'], avgs['workday'], avgs['weekend']]
-    colors = [COLOR_HOLIDAY, COLOR_WORKDAY, COLOR_WEEKEND]
-    explode = (0.05, 0, 0)          # 仅节假日扇区外凸
-
-    wedges, texts, autotexts = ax.pie(
-        sizes, labels=labels, autopct='%1.1f%%',
-        colors=colors, explode=explode, startangle=90,
-        textprops={'fontsize': 11},
-    )
-    for at in autotexts:
-        at.set_fontsize(10)
-    ax.set_title('Average Daily Questions: Holiday vs Workday vs Weekend', fontsize=13)
-
-    fig.tight_layout()
-    path = os.path.join(STEP_OUT, 'a2_holiday_workday_weekend_pie.png')
-    fig.savefig(path)
-    plt.close(fig)
-    log(f"Saved: {path}")
-
-    # CSV
+    # CSV only — chart merged into A1
     csv_path = os.path.join(STEP_OUT, 'a2_holiday_workday_weekend.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
@@ -288,70 +276,97 @@ def _aggregate_holiday_names(seekers: list[dict]) -> list[dict]:
 
 def dim_a3_per_holiday_vs_nonholiday(seekers: list[dict]):
     """
-    Grouped bar: each holiday name vs non-holiday baseline (avg daily questions).
-    分组柱状图：每个节假日名称的日均提问数与非节假日基线对比。
+    Merged two-panel figure: top = per-holiday vs non-holiday baseline,
+    bottom = per-holiday vs workday & weekend baselines.
+    合并双面板图：上部分=各节假日 vs 非节假日基线，下部分=各节假日 vs 工作日/周末基线。
     Args:
         seekers: 提问者数据行列表
     """
     log("=" * 50)
-    log("A3: Per-Holiday vs Non-Holiday Avg Daily Questions")
+    log("A3+A4: Per-Holiday Avg Daily Questions — Merged (top: vs Non-Holiday, bottom: vs Workday/Weekend)")
 
-    holiday_agg = _aggregate_holiday_names(seekers)  # 聚合各节假日数据
-
-    # 计算非节假日基线
-    non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
-    nh_avg = _avg_daily_questions(seekers, non_holiday_dates)
-    log(f"  Non-holiday baseline: {nh_avg:.1f} questions/day")
-
+    holiday_agg = _aggregate_holiday_names(seekers)
     if not holiday_agg:
         log("  WARN: No holiday data")
         return
 
-    names = [h['name'] for h in holiday_agg]       # 节假日名称列表
-    h_avgs = [h['avg_daily'] for h in holiday_agg] # 各节假日日均提问数
+    # 计算非节假日基线
+    non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
+    nh_avg = _avg_daily_questions(seekers, non_holiday_dates)
 
-    # Grouped bar chart（分组柱状图）
-    fig, ax = plt.subplots(figsize=(max(14, len(names) * 0.6), 6))  # 宽度自适应
-    x = np.arange(len(names))    # x轴位置
-    width = 0.35                 # 柱状图宽度
+    # 计算工作日和周末基线
+    workday_dates = set(r['date'] for r in seekers if r['period'] == 'workday')
+    weekend_dates = set(r['date'] for r in seekers if r['period'] == 'weekend')
+    wd_avg = _avg_daily_questions(seekers, workday_dates)
+    we_avg = _avg_daily_questions(seekers, weekend_dates)
 
-    bars = ax.bar(x, h_avgs, width, label='Holiday', color=COLOR_HOLIDAY, alpha=0.85)
-    # alpha=0.85 设置透明度，使颜色稍浅
+    log(f"  Non-holiday baseline: {nh_avg:.1f}, Workday: {wd_avg:.1f}, Weekend: {we_avg:.1f}")
 
-    # Baseline line（非节假日基线水平线）
-    ax.axhline(y=nh_avg, color='red', linestyle='--', linewidth=1.8,
-               label=f'Non-holiday avg ({nh_avg:.1f})')
+    names = [h['name'] for h in holiday_agg]
+    h_avgs = [h['avg_daily'] for h in holiday_agg]
 
-    # Labels（在柱子上方标注数值和天数）
-    for i, (bar, v, d) in enumerate(zip(bars, h_avgs, holiday_agg)):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
-                f'{v:.1f}\n(n={d["num_dates"]}d)',
-                ha='center', va='bottom', fontsize=7)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(max(14, len(names) * 0.6), 10))
+    x = np.arange(len(names))
+    width = 0.35
 
-    ax.set_xticks(x)                          # 设置x轴刻度位置
-    ax.set_xticklabels(names, rotation=45, ha='right', fontsize=9)  # 名称旋转45度避免重叠
-    ax.set_ylabel('Avg Daily Questions')      # y轴标签
-    ax.set_title('Per-Holiday Avg Daily Questions vs Non-Holiday Baseline')  # 标题
-    ax.legend(fontsize=10)                    # 图例
-    ax.grid(axis='y', alpha=0.3)              # y轴网格线，透明度0.3
-    ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))  # y轴刻度取整
+    # Top subplot: per-holiday vs non-holiday
+    bars1 = ax1.bar(x, h_avgs, width, label='Holiday', color=COLOR_HOLIDAY, alpha=0.85)
+    ax1.axhline(y=nh_avg, color='red', linestyle='--', linewidth=1.8,
+                label=f'Non-holiday avg ({nh_avg:.1f})')
+    for i, (bar, v, d) in enumerate(zip(bars1, h_avgs, holiday_agg)):
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                 f'{v:.1f}\n(n={d["num_dates"]}d)', ha='center', va='bottom', fontsize=7)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(names, rotation=45, ha='right', fontsize=9)
+    ax1.set_ylabel('Avg Daily Questions')
+    ax1.set_title('Per-Holiday vs Non-Holiday Baseline', fontsize=12)
+    ax1.legend(fontsize=9)
+    ax1.grid(axis='y', alpha=0.3)
 
+    # Bottom subplot: per-holiday vs workday & weekend
+    ax2.bar(x, h_avgs, width, label='Holiday', color=COLOR_HOLIDAY, alpha=0.85)
+    ax2.axhline(y=wd_avg, color=COLOR_WORKDAY, linestyle='--', linewidth=1.5,
+                label=f'Workday avg ({wd_avg:.1f})')
+    ax2.axhline(y=we_avg, color=COLOR_WEEKEND, linestyle='--', linewidth=1.5,
+                label=f'Weekend avg ({we_avg:.1f})')
+    for i, bar in enumerate(bars1):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                 f'{h_avgs[i]:.1f}', ha='center', va='bottom', fontsize=7)
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(names, rotation=45, ha='right', fontsize=9)
+    ax2.set_ylabel('Avg Daily Questions')
+    ax2.set_title('Per-Holiday vs Workday & Weekend Baselines', fontsize=12)
+    ax2.legend(fontsize=9)
+    ax2.grid(axis='y', alpha=0.3)
+
+    fig.suptitle('Per-Holiday Avg Daily Questions', fontsize=14)
     fig.tight_layout()
-    path = os.path.join(STEP_OUT, 'a3_per_holiday_vs_nonholiday.png')
+    path = os.path.join(STEP_OUT, 'a3_a4_per_holiday_merged.png')
     fig.savefig(path)
     plt.close(fig)
     log(f"Saved: {path}")
 
-    # CSV
-    csv_path = os.path.join(STEP_OUT, 'a3_per_holiday_vs_nonholiday.csv')
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+    # CSV — A3 data
+    csv_a3 = os.path.join(STEP_OUT, 'a3_per_holiday_vs_nonholiday.csv')
+    with open(csv_a3, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['holiday_name', 'avg_daily_questions', 'num_dates',
                      'total_questions', 'non_holiday_baseline'])
         for h in holiday_agg:
             w.writerow([h['name'], f'{h["avg_daily"]:.2f}', h['num_dates'],
                         h['total_questions'], f'{nh_avg:.2f}'])
-    log(f"Saved: {csv_path}")
+    log(f"Saved: {csv_a3}")
+
+    # CSV — A4 data
+    csv_a4 = os.path.join(STEP_OUT, 'a4_per_holiday_vs_workday_weekend.csv')
+    with open(csv_a4, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['holiday_name', 'avg_daily_questions', 'num_dates',
+                     'total_questions', 'workday_baseline', 'weekend_baseline'])
+        for h in holiday_agg:
+            w.writerow([h['name'], f'{h["avg_daily"]:.2f}', h['num_dates'],
+                        h['total_questions'], f'{wd_avg:.2f}', f'{we_avg:.2f}'])
+    log(f"Saved: {csv_a4}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -361,61 +376,24 @@ def dim_a3_per_holiday_vs_nonholiday(seekers: list[dict]):
 
 def dim_a4_per_holiday_vs_workday_weekend(seekers: list[dict]):
     """
-    Grouped bar: each holiday name avg daily questions,
-    with workday and weekend baselines.
-    分组柱状图：每个节假日的日均提问数，带工作日和周末基线对比。
+    Merged into A3 chart (a3_a4_per_holiday_merged.png — bottom subplot).
+    CSV output still produced here independently.
     Args:
         seekers: 提问者数据行列表
     """
     log("=" * 50)
-    log("A4: Per-Holiday vs Workday vs Weekend Avg Daily Questions")
+    log("A4: (merged into A3 chart bottom subplot — see a3_a4_per_holiday_merged.png)")
 
-    holiday_agg = _aggregate_holiday_names(seekers)  # 聚合各节假日数据
+    holiday_agg = _aggregate_holiday_names(seekers)
 
-    # 计算工作日和周末基线
     workday_dates = set(r['date'] for r in seekers if r['period'] == 'workday')
     weekend_dates = set(r['date'] for r in seekers if r['period'] == 'weekend')
-    wd_avg = _avg_daily_questions(seekers, workday_dates)  # 工作日日均
-    we_avg = _avg_daily_questions(seekers, weekend_dates)  # 周末日均
+    wd_avg = _avg_daily_questions(seekers, workday_dates)
+    we_avg = _avg_daily_questions(seekers, weekend_dates)
 
     log(f"  Workday baseline: {wd_avg:.1f}, Weekend baseline: {we_avg:.1f}")
 
-    if not holiday_agg:
-        log("  WARN: No holiday data")
-        return
-
-    names = [h['name'] for h in holiday_agg]
-    h_avgs = [h['avg_daily'] for h in holiday_agg]
-
-    # 创建图表，宽度根据节假日数量自适应
-    fig, ax = plt.subplots(figsize=(max(14, len(names) * 0.6), 6))
-    x = np.arange(len(names))
-    width = 0.25  # 柱宽（比A3更窄，因为不需要并列柱，仅显示节假日单柱）
-
-    # 节假日柱状图
-    ax.bar(x - width, h_avgs, width, label='Holiday', color=COLOR_HOLIDAY, alpha=0.85)
-    # 工作日基线（虚线）
-    ax.axhline(y=wd_avg, color=COLOR_WORKDAY, linestyle='--', linewidth=1.5,
-               label=f'Workday avg ({wd_avg:.1f})')
-    # 周末基线（虚线）
-    ax.axhline(y=we_avg, color=COLOR_WEEKEND, linestyle='--', linewidth=1.5,
-               label=f'Weekend avg ({we_avg:.1f})')
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(names, rotation=45, ha='right', fontsize=9)
-    ax.set_ylabel('Avg Daily Questions')
-    ax.set_title('Per-Holiday Avg Daily Questions vs Workday & Weekend')
-    ax.legend(fontsize=9)
-    ax.grid(axis='y', alpha=0.3)
-    ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
-
-    fig.tight_layout()
-    path = os.path.join(STEP_OUT, 'a4_per_holiday_vs_workday_weekend.png')
-    fig.savefig(path)
-    plt.close(fig)
-    log(f"Saved: {path}")
-
-    # CSV
+    # CSV only — chart merged into A3
     csv_path = os.path.join(STEP_OUT, 'a4_per_holiday_vs_workday_weekend.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
@@ -504,64 +482,97 @@ def _plot_hourly_comparison(
 #  B1: Hourly comparison: Holiday vs Non-holiday
 
 def dim_b1_hourly_holiday_vs_nonholiday(seekers: list[dict]):
-    """Line chart: hourly avg questions, holiday vs non-holiday.
-       折线图：节假日 vs 非节假日 各小时平均提问数。"""
+    """Merged two-panel figure: top = holiday vs non-holiday, bottom = holiday vs workday vs weekend.
+    合并双面板折线图：上部分=节假日 vs 非节假日，下部分=节假日 vs 工作日 vs 周末。"""
     log("=" * 50)
-    log("B1: Hourly Question Distribution - Holiday vs Non-Holiday")
+    log("B1+B2: Hourly Distribution — Merged (top: Holiday vs Non-Holiday, bottom: Holiday vs Workday vs Weekend)")
 
-    # 收集节假日和非节假日日期集合
+    # 收集各组日期集合
     holiday_dates = set(r['date'] for r in seekers if r['period'] == 'holiday')
     non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
+    workday_dates = set(r['date'] for r in seekers if r['period'] == 'workday')
+    weekend_dates = set(r['date'] for r in seekers if r['period'] == 'weekend')
 
-    # 计算两组逐小时均值
-    h_hourly = _hourly_avg(seekers, holiday_dates)         # 节假日逐小时均值
-    nh_hourly = _hourly_avg(seekers, non_holiday_dates)    # 非节假日逐小时均值
+    # 计算各组逐小时均值
+    h_hourly = _hourly_avg(seekers, holiday_dates)
+    nh_hourly = _hourly_avg(seekers, non_holiday_dates)
+    wd_hourly = _hourly_avg(seekers, workday_dates)
+    we_hourly = _hourly_avg(seekers, weekend_dates)
 
-    # 使用通用绘图函数
-    _plot_hourly_comparison(
-        {'Holiday': h_hourly, 'Non-holiday': nh_hourly},
-        'Hourly Avg Questions: Holiday vs Non-Holiday',
-        'b1_hourly_holiday_vs_nonholiday.png',
-        {'Holiday': COLOR_HOLIDAY, 'Non-holiday': COLOR_NONHOLIDAY},
-    )
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
+    hours = list(range(24))
 
-    # CSV
-    csv_path = os.path.join(STEP_OUT, 'b1_hourly_holiday_vs_nonholiday.csv')
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+    # Top: holiday vs non-holiday
+    ax1.plot(hours, h_hourly, 'o-', label='Holiday', color=COLOR_HOLIDAY,
+             linewidth=2, markersize=4, alpha=0.85)
+    ax1.plot(hours, nh_hourly, 'o-', label='Non-holiday', color=COLOR_NONHOLIDAY,
+             linewidth=2, markersize=4, alpha=0.85)
+    ax1.set_ylabel('Avg Questions/hr/day')
+    ax1.set_title('Hourly Avg Questions: Holiday vs Non-Holiday', fontsize=12)
+    ax1.legend(fontsize=10)
+    ax1.grid(axis='y', alpha=0.3)
+    ax1.set_xticks(range(0, 24, 2))
+    ax1.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+
+    # Bottom: holiday vs workday vs weekend
+    ax2.plot(hours, h_hourly, 'o-', label='Holiday', color=COLOR_HOLIDAY,
+             linewidth=2, markersize=4, alpha=0.85)
+    ax2.plot(hours, wd_hourly, 'o-', label='Workday', color=COLOR_WORKDAY,
+             linewidth=2, markersize=4, alpha=0.85)
+    ax2.plot(hours, we_hourly, 'o-', label='Weekend', color=COLOR_WEEKEND,
+             linewidth=2, markersize=4, alpha=0.85)
+    ax2.set_xlabel('Hour of Day (UTC)')
+    ax2.set_ylabel('Avg Questions/hr/day')
+    ax2.set_title('Hourly Avg Questions: Holiday vs Workday vs Weekend', fontsize=12)
+    ax2.legend(fontsize=10)
+    ax2.grid(axis='y', alpha=0.3)
+    ax2.set_xticks(range(0, 24, 2))
+    ax2.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+
+    fig.suptitle('Hourly Question Distribution', fontsize=14)
+    fig.tight_layout()
+    path = os.path.join(STEP_OUT, 'b1_b2_hourly_merged.png')
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+    # CSV — B1
+    csv_b1 = os.path.join(STEP_OUT, 'b1_hourly_holiday_vs_nonholiday.csv')
+    with open(csv_b1, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['hour', 'holiday_avg', 'non_holiday_avg'])  # 表头：小时、节假日均值、非节假日均值
+        w.writerow(['hour', 'holiday_avg', 'non_holiday_avg'])
         for h in range(24):
             w.writerow([h, f'{h_hourly[h]:.4f}', f'{nh_hourly[h]:.4f}'])
-    log(f"Saved: {csv_path}")
+    log(f"Saved: {csv_b1}")
+
+    # CSV — B2
+    csv_b2 = os.path.join(STEP_OUT, 'b2_hourly_holiday_workday_weekend.csv')
+    with open(csv_b2, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['hour', 'holiday_avg', 'workday_avg', 'weekend_avg'])
+        for h in range(24):
+            w.writerow([h, f'{h_hourly[h]:.4f}', f'{wd_hourly[h]:.4f}', f'{we_hourly[h]:.4f}'])
+    log(f"Saved: {csv_b2}")
 
 
 # ── B2: 节假日 VS 工作日 VS 周末 小时段 ──────────────────────────────
 #  B2: Hourly comparison: Holiday vs Workday vs Weekend
 
 def dim_b2_hourly_holiday_workday_weekend(seekers: list[dict]):
-    """Line chart: hourly avg questions, holiday vs workday vs weekend.
-       折线图：节假日 vs 工作日 vs 周末 各小时平均提问数。"""
+    """Merged into B1 chart (b1_b2_hourly_merged.png — bottom subplot).
+    CSV output still produced here independently."""
     log("=" * 50)
-    log("B2: Hourly Question Distribution - Holiday vs Workday vs Weekend")
+    log("B2: (merged into B1 chart bottom subplot — see b1_b2_hourly_merged.png)")
 
-    # 按三个时段分别收集日期
     period_dates = {}
     for p in ['holiday', 'workday', 'weekend']:
         period_dates[p] = set(r['date'] for r in seekers if r['period'] == p)
 
-    # 计算各时段逐小时均值
     hourly_data = {}
     for p in ['holiday', 'workday', 'weekend']:
         hourly_data[p.capitalize()] = _hourly_avg(seekers, period_dates[p])
 
-    _plot_hourly_comparison(
-        hourly_data,
-        'Hourly Avg Questions: Holiday vs Workday vs Weekend',
-        'b2_hourly_holiday_workday_weekend.png',
-        {'Holiday': COLOR_HOLIDAY, 'Workday': COLOR_WORKDAY, 'Weekend': COLOR_WEEKEND},
-    )
-
-    # CSV
+    # CSV only — chart merged into B1
     csv_path = os.path.join(STEP_OUT, 'b2_hourly_holiday_workday_weekend.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)

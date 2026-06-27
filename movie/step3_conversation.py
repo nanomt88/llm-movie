@@ -43,6 +43,26 @@ setup_matplotlib()                         # 初始化 matplotlib（后端+字�
 STEP_OUT = STEP_DIRS[3]                    # 步骤3输出目录：output/movie/step3/
 os.makedirs(STEP_OUT, exist_ok=True)       # 确保输出目录存在
 
+# Turn count group buckets
+# 轮次分组桶
+TURN_GROUPS = ['1', '2-5', '5-20', '20-100', '100+']
+
+# Turn count to bucket mapping
+# 轮次数到分桶的映射
+def _turn_count_to_bucket(cnt: int) -> str:
+    """Map a turn count to a group label.
+    将轮次数映射到分组标签。"""
+    if cnt == 1:
+        return '1'
+    elif 2 <= cnt <= 5:
+        return '2-5'
+    elif 5 <= cnt <= 20:
+        return '5-20'
+    elif 20 <= cnt <= 100:
+        return '20-100'
+    else:
+        return '100+'
+
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Helper: classify session period (by its first user question)
@@ -83,6 +103,106 @@ def _session_first_date(rows: list[dict]) -> dict[str, str]:
             if sid not in first_date:          # 只记录第一个提问的日期
                 first_date[sid] = r['date']
     return first_date
+
+
+def _compute_turn_groups(rows: list[dict], dedup: bool = False) -> dict[str, int]:
+    """
+    Compute session count per turn group bucket.
+    计算每个轮次分组桶中的会话数量。
+
+    Turn groups (轮次分组):
+      '1': 1 turn          （1 轮）
+      '2-5': 2-5 turns     （2-5 轮）
+      '5-20': 5-20 turns   （5-20 轮）
+      '20-100': 20-100 turns （20-100 轮）
+      '100+': 100+ turns   （100 轮以上）
+
+    If dedup=True, count unique user questions per session (deduped by content).
+    如果 dedup=True，按内容去重，统计每会话的唯一用户提问数。
+    If dedup=False, count all rows per session.
+    如果 dedup=False，统计每会话的所有行数。
+
+    Returns:
+        {bucket_label: session_count} （{分组标签: 会话数}）
+    """
+    if dedup:
+        session_questions = _session_user_question_counts(rows)
+        counts: dict[str, int] = {}
+        for sid, questions in session_questions.items():
+            unique = set()
+            for q in questions:
+                text = q.get('proc_text', '') or q.get('raw_text', '')
+                unique.add(text.strip())
+            counts[sid] = len(unique)
+    else:
+        counts = _session_turn_counts(rows)
+
+    result = {g: 0 for g in TURN_GROUPS}
+    for cnt in counts.values():
+        if cnt == 1:
+            result['1'] += 1
+        elif 2 <= cnt <= 5:
+            result['2-5'] += 1
+        elif 5 <= cnt <= 20:
+            result['5-20'] += 1
+        elif 20 <= cnt <= 100:
+            result['20-100'] += 1
+        else:
+            result['100+'] += 1
+    return result
+
+
+def _plot_turn_group_comparison(
+    stats: dict[str, dict[str, dict[str, int]]],
+    title: str, filename: str):
+    """
+    Bar chart comparing turn group distributions across groups.
+    分组柱状图：比较不同组的轮次分布。
+    stats: {group_label: {'no_dedup': {bucket: count}, 'dedup': {bucket: count}}}
+    """
+    groups = list(stats.keys())
+    buckets = TURN_GROUPS
+    x = np.arange(len(buckets))
+    n_groups = len(groups)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(max(14, n_groups * 1.5), 5))
+    width = 0.7 / max(n_groups, 1)
+
+    group_colors = {
+        'Holiday': COLOR_HOLIDAY,
+        'Non-holiday': COLOR_NONHOLIDAY,
+        'Workday': COLOR_WORKDAY,
+        'Weekend': COLOR_WEEKEND,
+    }
+
+    for mode_idx, (mode, ax) in enumerate([('no_dedup', ax1), ('dedup', ax2)]):
+        for i, group in enumerate(groups):
+            vals = [stats[group][mode].get(b, 0) for b in buckets]
+            offset = (i - (n_groups - 1) / 2) * width
+            color = group_colors.get(group, f'C{i}')
+            bars = ax.bar(x + offset, vals, width, label=group, color=color, alpha=0.8)
+            # Annotate with thin black text on small bars avoid clutter
+            for j, v in enumerate(vals):
+                if v > max(max(vals) * 0.05, 5):
+                    ax.text(x[j] + offset, v + max(vals) * 0.01,
+                            f'{v}', ha='center', va='bottom', fontsize=6)
+
+        mode_label = 'No Dedup (All Rows)' if mode == 'no_dedup' else 'Dedup (Unique Questions)'
+        ax.set_xticks(x)
+        ax.set_xticklabels(buckets, fontsize=9)
+        ax.set_xlabel('Turn Group')
+        ax.set_ylabel('Session Count')
+        ax.set_title(mode_label, fontsize=10)
+        ax.legend(fontsize=8)
+        ax.grid(axis='y', alpha=0.3)
+        ax.yaxis.set_major_formatter(ticker.ScalarFormatter(useMathText=True))
+
+    fig.suptitle(title, fontsize=12)
+    fig.tight_layout()
+    path = os.path.join(STEP_OUT, filename)
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -176,71 +296,16 @@ def _multi_turn_stats(rows: list[dict]) -> dict:
     }
 
 
-def _plot_turn_comparison(stats_dict: dict[str, dict], title: str, filename: str):
-    """Bar chart comparing turn stats across groups.
-       柱状图：比较不同组之间的会话轮次统计。
-    Args:
-        stats_dict: 组名 -> 统计字典
-        title:      图表标题
-        filename:   保存文件名
-    """
-    groups = list(stats_dict.keys())                          # 组名列表
-    metrics = ['avg_turns_per_session', 'multi_turn_ratio']    # 两个维度
-    metric_labels = ['Avg Turns/Session', 'Multi-Turn Ratio (%)']
-
-    # 左右两个子图
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-
-    # Avg turns（左图：平均轮次）
-    values1 = [stats_dict[g]['avg_turns_per_session'] for g in groups]
-    ax1.bar(groups, values1, color=[COLOR_HOLIDAY, COLOR_NONHOLIDAY][:len(groups)]
-            if len(groups) <= 2 else [COLOR_HOLIDAY, COLOR_WORKDAY, COLOR_WEEKEND],
-            alpha=0.8, width=0.5)
-    for i, v in enumerate(values1):
-        ax1.text(i, v + 0.05, f'{v:.2f}', ha='center', va='bottom', fontsize=10)
-    ax1.set_ylabel('Avg Turns')
-    ax1.set_title('Avg Turns per Session')
-    ax1.grid(axis='y', alpha=0.3)
-
-    # Multi-turn ratio（右图：多轮会话占比）
-    values2 = [stats_dict[g]['multi_turn_ratio'] for g in groups]
-    ax2.bar(groups, values2, color=[COLOR_HOLIDAY, COLOR_NONHOLIDAY][:len(groups)]
-            if len(groups) <= 2 else [COLOR_HOLIDAY, COLOR_WORKDAY, COLOR_WEEKEND],
-            alpha=0.8, width=0.5)
-    for i, v in enumerate(values2):
-        ax2.text(i, v + 0.3, f'{v:.1f}%', ha='center', va='bottom', fontsize=10)
-    ax2.set_ylabel('Ratio (%)')
-    ax2.set_title('Multi-Turn Session Ratio')
-    ax2.grid(axis='y', alpha=0.3)
-
-    fig.suptitle(title, fontsize=13)
-    fig.tight_layout()
-    path = os.path.join(STEP_OUT, filename)
-    fig.savefig(path)
-    plt.close(fig)
-    log(f"Saved: {path}")
-
-
 def _plot_per_holiday_turn_bars(
     holiday_agg: list, baseline_val: float, baseline_label: str,
     value_key: str, ylabel: str, title: str, filename: str, color: str,
 ):
-    """Bar chart: each holiday's turn metric vs baseline.
-       柱状图：每个节假日的轮次指标与基线的对比。
-    Args:
-        holiday_agg:   节假日聚合数据列表
-        baseline_val:  基线值（如非节假日均值）
-        baseline_label: 基线标签
-        value_key:     从字典中取值的关键字
-        ylabel:        y轴标签
-        title:         图表标题
-        filename:      保存文件名
-        color:         柱状图颜色
-    """
+    """Bar chart: each holiday's metric vs baseline.
+       柱状图：每个节假日指标与基线的对比。"""
     if not holiday_agg:
         return
-    names = [h['name'] for h in holiday_agg]                   # 节假日名称
-    values = [h[value_key] for h in holiday_agg]               # 指标值
+    names = [h['name'] for h in holiday_agg]
+    values = [h[value_key] for h in holiday_agg]
 
     fig, ax = plt.subplots(figsize=(max(14, len(names) * 0.6), 6))
     x = np.arange(len(names))
@@ -248,9 +313,9 @@ def _plot_per_holiday_turn_bars(
 
     bars = ax.bar(x, values, width, label='Holiday', color=color, alpha=0.85)
     ax.axhline(y=baseline_val, color='red', linestyle='--', linewidth=1.8,
-               label=f'{baseline_label} ({baseline_val:.2f})')  # 基线水平线
+               label=f'{baseline_label} ({baseline_val:.2f})')
 
-    for bar, v in zip(bars, values):                           # 标注数值
+    for bar, v in zip(bars, values):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02 * max(values),
                 f'{v:.2f}', ha='center', va='bottom', fontsize=7)
 
@@ -268,38 +333,99 @@ def _plot_per_holiday_turn_bars(
     log(f"Saved: {path}")
 
 
+def _plot_per_holiday_time_combined(
+    holiday_agg: list,
+    interval_baseline: float, duration_baseline: float,
+    baseline_label: str,
+    interval_key: str, duration_key: str,
+    title: str, filename: str, color: str,
+):
+    """Combined figure: interval (top) and duration (bottom) bar charts vs baseline.
+       合并图：上半部分为平均间隔，下半部分为平均时长。"""
+    if not holiday_agg:
+        return
+    names = [h['name'] for h in holiday_agg]
+    interval_vals = [h[interval_key] for h in holiday_agg]
+    duration_vals = [h[duration_key] for h in holiday_agg]
+
+    fig, (ax1, ax2) = plt.subplots(
+        2, 1, figsize=(max(14, len(names) * 0.6), 10),
+        sharex=True,
+    )
+
+    x = np.arange(len(names))
+    width = 0.35
+
+    # ── Top: Interval ──
+    bars1 = ax1.bar(x, interval_vals, width, label='Holiday', color=color, alpha=0.85)
+    ax1.axhline(y=interval_baseline, color='red', linestyle='--', linewidth=1.8,
+                label=f'{baseline_label} ({interval_baseline:.2f}h)')
+    for bar, v in zip(bars1, interval_vals):
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02 * max(interval_vals),
+                 f'{v:.2f}', ha='center', va='bottom', fontsize=7)
+    ax1.set_ylabel('Avg Interval (hours)')
+    ax1.set_title(f'{title} — Interval')
+    ax1.legend(fontsize=9)
+    ax1.grid(axis='y', alpha=0.3)
+
+    # ── Bottom: Duration ──
+    bars2 = ax2.bar(x, duration_vals, width, label='Holiday', color=color, alpha=0.85)
+    ax2.axhline(y=duration_baseline, color='red', linestyle='--', linewidth=1.8,
+                label=f'{baseline_label} ({duration_baseline:.2f}h)')
+    for bar, v in zip(bars2, duration_vals):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02 * max(duration_vals),
+                 f'{v:.2f}', ha='center', va='bottom', fontsize=7)
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(names, rotation=45, ha='right', fontsize=9)
+    ax2.set_ylabel('Avg Duration (hours)')
+    ax2.set_title(f'{title} — Duration')
+    ax2.legend(fontsize=9)
+    ax2.grid(axis='y', alpha=0.3)
+
+    fig.suptitle(title, fontsize=14, fontweight='bold')
+    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    path = os.path.join(STEP_OUT, filename)
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+
 # ── A1: 节假日 VS 非节假日 ────────────────────────────────────────────
-#  A1: Holiday vs Non-Holiday Session Turns
+#  A1: Holiday vs Non-Holiday Turn Groups
 
 def dim_e1_holiday_vs_nonholiday_turns(rows: list[dict]):
-    """Compare session turn stats: holiday vs non-holiday.
-       比较节假日 vs 非节假日的会话轮次统计。"""
+    """Compare turn group distribution: holiday vs non-holiday.
+    比较节假日 vs 非节假日的轮次分组分布（含去重/不去重）。"""
     log("=" * 50)
-    log("E1: Holiday vs Non-Holiday Session Turns")
+    log("E1: Holiday vs Non-Holiday Turn Groups")
 
-    session_period = _session_period_series(rows)              # 获取各会话的时段
+    session_period = _session_period_series(rows)
 
-    # 按节假日/非节假日划分会话
     holiday_sessions = set(sid for sid, p in session_period.items() if p == 'holiday')
     non_holiday_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
 
-    # 筛选各自的数据行
     h_rows = [r for r in rows if r['session_id'] in holiday_sessions]
     nh_rows = [r for r in rows if r['session_id'] in non_holiday_sessions]
 
-    h_stats = _multi_turn_stats(h_rows)                        # 节假日统计
-    nh_stats = _multi_turn_stats(nh_rows)                      # 非节假日统计
+    stats = {
+        'Holiday': {
+            'no_dedup': _compute_turn_groups(h_rows, dedup=False),
+            'dedup': _compute_turn_groups(h_rows, dedup=True),
+        },
+        'Non-holiday': {
+            'no_dedup': _compute_turn_groups(nh_rows, dedup=False),
+            'dedup': _compute_turn_groups(nh_rows, dedup=True),
+        },
+    }
 
-    log(f"  Holiday: {h_stats['total_sessions']} sessions, "
-        f"avg {h_stats['avg_turns_per_session']:.2f} turns, "
-        f"multi-turn {h_stats['multi_turn_ratio']:.1f}%")
-    log(f"  Non-holiday: {nh_stats['total_sessions']} sessions, "
-        f"avg {nh_stats['avg_turns_per_session']:.2f} turns, "
-        f"multi-turn {nh_stats['multi_turn_ratio']:.1f}%")
+    total_h = sum(stats['Holiday']['no_dedup'].values())
+    total_nh = sum(stats['Non-holiday']['no_dedup'].values())
+    log(f"  Holiday: {total_h} sessions")
+    log(f"  Non-holiday: {total_nh} sessions")
 
-    _plot_turn_comparison(
-        {'Holiday': h_stats, 'Non-holiday': nh_stats},
-        'Session Turn Stats: Holiday vs Non-Holiday',
+    _plot_turn_group_comparison(
+        stats,
+        'Turn Group Distribution: Holiday vs Non-Holiday',
         'e1_holiday_vs_nonholiday_turns.png',
     )
 
@@ -307,40 +433,41 @@ def dim_e1_holiday_vs_nonholiday_turns(rows: list[dict]):
     csv_path = os.path.join(STEP_OUT, 'e1_holiday_vs_nonholiday_turns.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['group', 'total_sessions', 'avg_turns_per_session',
-                     'multi_turn_sessions', 'multi_turn_ratio'])
-        for label, stats in [('holiday', h_stats), ('non_holiday', nh_stats)]:
-            w.writerow([label, stats['total_sessions'],
-                        f'{stats["avg_turns_per_session"]:.2f}',
-                        stats['multi_turn_sessions'],
-                        f'{stats["multi_turn_ratio"]:.2f}%'])
+        w.writerow(['group', 'bucket', 'no_dedup_count', 'dedup_count'])
+        for label, data in stats.items():
+            for b in TURN_GROUPS:
+                w.writerow([label, b, data['no_dedup'].get(b, 0),
+                            data['dedup'].get(b, 0)])
     log(f"Saved: {csv_path}")
 
 
 # ── A2: 节假日 VS 工作日 VS 周末 ──────────────────────────────────────
-#  A2: Holiday vs Workday vs Weekend Session Turns
+#  A2: Holiday vs Workday vs Weekend Turn Groups
 
 def dim_e2_holiday_workday_weekend_turns(rows: list[dict]):
-    """Compare session turn stats: holiday vs workday vs weekend.
-       比较节假日 vs 工作日 vs 周末的会话轮次统计。"""
+    """Compare turn group distribution: holiday vs workday vs weekend.
+    比较节假日 vs 工作日 vs 周末的轮次分组分布。"""
     log("=" * 50)
-    log("E2: Holiday vs Workday vs Weekend Session Turns")
+    log("E2: Holiday vs Workday vs Weekend Turn Groups")
 
     session_period = _session_period_series(rows)
-    # 按三个时段划分会话
     period_sessions = {p: set(sid for sid, pp in session_period.items() if pp == p)
                        for p in ['holiday', 'workday', 'weekend']}
 
     stats = {}
     for p in ['holiday', 'workday', 'weekend']:
         p_rows = [r for r in rows if r['session_id'] in period_sessions[p]]
-        stats[p.capitalize()] = _multi_turn_stats(p_rows)
-        log(f"  {p}: {stats[p.capitalize()]['total_sessions']} sessions, "
-            f"avg {stats[p.capitalize()]['avg_turns_per_session']:.2f} turns")
+        label = p.capitalize()
+        stats[label] = {
+            'no_dedup': _compute_turn_groups(p_rows, dedup=False),
+            'dedup': _compute_turn_groups(p_rows, dedup=True),
+        }
+        total = sum(stats[label]['no_dedup'].values())
+        log(f"  {p}: {total} sessions")
 
-    _plot_turn_comparison(
+    _plot_turn_group_comparison(
         stats,
-        'Session Turn Stats: Holiday vs Workday vs Weekend',
+        'Turn Group Distribution: Holiday vs Workday vs Weekend',
         'e2_holiday_workday_weekend_turns.png',
     )
 
@@ -348,141 +475,218 @@ def dim_e2_holiday_workday_weekend_turns(rows: list[dict]):
     csv_path = os.path.join(STEP_OUT, 'e2_holiday_workday_weekend_turns.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['group', 'total_sessions', 'avg_turns_per_session',
-                     'multi_turn_sessions', 'multi_turn_ratio'])
+        w.writerow(['group', 'bucket', 'no_dedup_count', 'dedup_count'])
         for p in ['holiday', 'workday', 'weekend']:
-            s = stats[p.capitalize()]
-            w.writerow([p, s['total_sessions'], f'{s["avg_turns_per_session"]:.2f}',
-                        s['multi_turn_sessions'], f'{s["multi_turn_ratio"]:.2f}%'])
+            label = p.capitalize()
+            for b in TURN_GROUPS:
+                w.writerow([p, b, stats[label]['no_dedup'].get(b, 0),
+                            stats[label]['dedup'].get(b, 0)])
     log(f"Saved: {csv_path}")
 
 
 # ── A3: 各个节假日 VS 非节假日 ────────────────────────────────────────
-#  A3: Per-Holiday vs Non-Holiday Session Turns
+#  A3: Per-Holiday vs Non-Holiday Turn Groups
 
-def _holiday_name_turn_stats(rows: list[dict]) -> list[dict]:
-    """Aggregate turn stats by holiday name (first 6 chars).
-       按节假日名称（前6个字符）聚合会话轮次统计。"""
+def _holiday_turn_groups(rows: list[dict], dedup: bool = False) -> dict[str, dict[str, int]]:
+    """Compute per-holiday turn group distributions.
+    计算每个节假日的轮次分组分布。"""
     session_period = _session_period_series(rows)
 
-    # Group sessions by holiday name
-    holiday_sessions = defaultdict(list)        # 节假日名称 -> 会话列表
-    holiday_session_sets = defaultdict(set)     # 用于去重
+    holiday_name_sessions = defaultdict(set)
     for r in rows:
         if r['is_seeker'] and r['period'] == 'holiday':
             name = r['holiday_name'][:6]
-            if r['session_id'] not in holiday_session_sets[name]:  # 避免重复添加同一会话
-                holiday_session_sets[name].add(r['session_id'])
-                holiday_sessions[name].append((r['session_id'], r['date']))
+            holiday_name_sessions[name].add(r['session_id'])
 
-    result = []
-    for name, sessions in holiday_sessions.items():
-        if len(sessions) < MIN_DATA_ROWS // 5:   # 数据太少则跳过
+    result = {}
+    for name, sids in holiday_name_sessions.items():
+        if len(sids) < MIN_DATA_ROWS // 5:
             continue
-        session_ids = set(s[0] for s in sessions)  # 该节假日的所有会话ID
-        p_rows = [r for r in rows if r['session_id'] in session_ids]  # 筛选数据行
-        stats = _multi_turn_stats(p_rows)          # 计算多轮统计
-        stats['name'] = name
-        stats['num_sessions'] = len(sessions)       # 会话数
-        result.append(stats)
-
-    result.sort(key=lambda x: x['num_sessions'], reverse=True)  # 按会话数降序
+        p_rows = [r for r in rows if r['session_id'] in sids]
+        result[name] = _compute_turn_groups(p_rows, dedup=dedup)
     return result
 
 
 def dim_e3_per_holiday_vs_nonholiday_turns(rows: list[dict]):
-    """Per-holiday turn stats vs non-holiday baseline.
-       各节假日轮次统计 vs 非节假日基线。"""
+    """Per-holiday turn groups vs non-holiday baseline (heatmap).
+    各节假日轮次分组 vs 非节假日基线（热力图）。"""
     log("=" * 50)
-    log("E3: Per-Holiday Session Turns vs Non-Holiday")
-
-    holiday_agg = _holiday_name_turn_stats(rows)            # 各节假日聚合数据
+    log("E3: Per-Holiday Turn Groups vs Non-Holiday")
 
     session_period = _session_period_series(rows)
     nh_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
     nh_rows = [r for r in rows if r['session_id'] in nh_sessions]
-    nh_stats = _multi_turn_stats(nh_rows)                   # 非节假日基线
-    nh_avg = nh_stats['avg_turns_per_session']              # 平均轮次
-    nh_mt = nh_stats['multi_turn_ratio']                    # 多轮占比
+    nh_no_dedup = _compute_turn_groups(nh_rows, dedup=False)
+    nh_dedup = _compute_turn_groups(nh_rows, dedup=True)
 
-    log(f"  Non-holiday baseline: avg {nh_avg:.2f} turns, "
-        f"multi-turn {nh_mt:.1f}%")
-    log(f"  Holidays: {len(holiday_agg)} groups")
+    holiday_tg = _holiday_turn_groups(rows, dedup=False)
+    holiday_tg_dedup = _holiday_turn_groups(rows, dedup=True)
 
-    # 平均轮次柱状图
-    _plot_per_holiday_turn_bars(
-        holiday_agg, nh_avg, 'Non-holiday avg',
-        'avg_turns_per_session', 'Avg Turns per Session',
-        'Per-Holiday Avg Session Turns vs Non-Holiday Baseline',
-        'e3_per_holiday_vs_nonholiday_turns.png',
-        COLOR_HOLIDAY,
-    )
+    if not holiday_tg:
+        log("  No holiday groups")
+        return
 
-    # 多轮占比柱状图
-    _plot_per_holiday_turn_bars(
-        holiday_agg, nh_mt, 'Non-holiday avg',
-        'multi_turn_ratio', 'Multi-Turn Ratio (%)',
-        'Per-Holiday Multi-Turn Session Ratio vs Non-Holiday Baseline',
-        'e3_per_holiday_vs_nonholiday_multiturn_ratio.png',
-        COLOR_HOLIDAY,
-    )
+    names = sorted(holiday_tg.keys())
+    log(f"  Non-holiday baseline (no_dedup): {nh_no_dedup}")
+    log(f"  Holidays: {len(names)} groups")
+
+    # Heatmap: rows=holidays, cols=buckets, value = holiday_ratio - nh_ratio
+    nh_total = sum(nh_no_dedup.values())
+    nh_total_dedup = sum(nh_dedup.values())
+
+    for mode, tg_dict, nh_tg, nh_total_val, suffix in [
+        ('No Dedup', holiday_tg, nh_no_dedup, nh_total, 'no_dedup'),
+        ('Dedup', holiday_tg_dedup, nh_dedup, nh_total_dedup, 'dedup'),
+    ]:
+        if not tg_dict:
+            continue
+        nh_ratios = {b: nh_tg.get(b, 0) / max(nh_total_val, 1) * 100 for b in TURN_GROUPS}
+        matrix = np.zeros((len(names), len(TURN_GROUPS)))
+        for i, name in enumerate(names):
+            total = sum(tg_dict.get(name, {}).values())
+            for j, b in enumerate(TURN_GROUPS):
+                h_ratio = tg_dict.get(name, {}).get(b, 0) / max(total, 1) * 100
+                matrix[i, j] = h_ratio - nh_ratios[b]
+
+        fig, ax = plt.subplots(figsize=(max(10, len(names) * 0.45), max(5, len(names) * 0.4 + 2)))
+        vmax = max(abs(matrix.min()), abs(matrix.max()), 0.1)
+        im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
+        ax.set_xticks(range(len(TURN_GROUPS)))
+        ax.set_xticklabels(TURN_GROUPS, fontsize=9)
+        ax.set_yticks(range(len(names)))
+        ax.set_yticklabels(names, fontsize=7)
+        ax.set_xlabel('Turn Group')
+        ax.set_title(f'Per-Holiday Turn Group Ratio — Diff from Non-Holiday ({suffix})', fontsize=10)
+        fig.colorbar(im, ax=ax, shrink=0.6, label='Diff in % points')
+        fig.tight_layout()
+        path = os.path.join(STEP_OUT, f'e3_per_holiday_vs_nonholiday_turns_{suffix}.png')
+        fig.savefig(path)
+        plt.close(fig)
+        log(f"Saved: {path}")
 
     # CSV
     csv_path = os.path.join(STEP_OUT, 'e3_per_holiday_vs_nonholiday_turns.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['holiday_name', 'num_sessions', 'avg_turns_per_session',
-                     'multi_turn_sessions', 'multi_turn_ratio',
-                     'nh_baseline_avg_turns', 'nh_baseline_mt_ratio'])
-        for h in holiday_agg:
-            w.writerow([h['name'], h['num_sessions'],
-                        f'{h["avg_turns_per_session"]:.2f}',
-                        h['multi_turn_sessions'], f'{h["multi_turn_ratio"]:.2f}%',
-                        f'{nh_avg:.2f}', f'{nh_mt:.2f}%'])
+        w.writerow(['holiday_name', 'bucket', 'count_no_dedup', 'count_dedup',
+                     'nh_ratio_no_dedup', 'nh_ratio_dedup'])
+        for name in names:
+            for b in TURN_GROUPS:
+                v_nd = holiday_tg.get(name, {}).get(b, 0)
+                v_d = holiday_tg_dedup.get(name, {}).get(b, 0)
+                w.writerow([name, b, v_nd, v_d,
+                            f'{nh_no_dedup.get(b, 0) / max(nh_total, 1) * 100:.2f}%',
+                            f'{nh_dedup.get(b, 0) / max(nh_total_dedup, 1) * 100:.2f}%'])
     log(f"Saved: {csv_path}")
 
 
 # ── A4: 各个节假日 VS 工作日 VS 周末 ──────────────────────────────────
-#  A4: Per-Holiday vs Workday & Weekend Turns
+#  A4: Per-Holiday vs Workday & Weekend Turn Groups
 
 def dim_e4_per_holiday_vs_workday_weekend_turns(rows: list[dict]):
-    """Per-holiday turn stats vs workday & weekend baselines.
-       各节假日轮次统计 vs 工作日/周末基线。"""
+    """Per-holiday turn groups vs workday & weekend (heatmap by mode).
+    各节假日轮次分组 vs 工作日/周末（热力图）。"""
     log("=" * 50)
-    log("E4: Per-Holiday Turns vs Workday & Weekend")
+    log("E4: Per-Holiday Turn Groups vs Workday & Weekend")
 
-    holiday_agg = _holiday_name_turn_stats(rows)            # 各节假日聚合数据
     session_period = _session_period_series(rows)
 
+    # Compute workday/weekend baselines
     baselines = {}
     for p in ['workday', 'weekend']:
         p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
         p_rows = [r for r in rows if r['session_id'] in p_sessions]
-        baselines[p] = _multi_turn_stats(p_rows)
-        log(f"  {p}: avg {baselines[p]['avg_turns_per_session']:.2f} turns")
+        baselines[p] = {
+            'no_dedup': _compute_turn_groups(p_rows, dedup=False),
+            'dedup': _compute_turn_groups(p_rows, dedup=True),
+        }
+        log(f"  {p}: {sum(baselines[p]['no_dedup'].values())} sessions")
 
-    # 平均轮次 vs 工作日基线
-    _plot_per_holiday_turn_bars(
-        holiday_agg, baselines['workday']['avg_turns_per_session'],
-        'Workday avg', 'avg_turns_per_session',
-        'Avg Turns per Session',
-        'Per-Holiday Avg Session Turns vs Workday & Weekend',
-        'e4_per_holiday_vs_workday_weekend_turns.png',
-        COLOR_HOLIDAY,
-    )
+    holiday_tg = _holiday_turn_groups(rows, dedup=False)
+    holiday_tg_dedup = _holiday_turn_groups(rows, dedup=True)
+
+    if not holiday_tg:
+        log("  No holiday groups")
+        return
+
+    names = sorted(holiday_tg.keys())
+
+    for b in TURN_GROUPS:
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, max(5, len(names) * 0.35 + 1.5)))
+
+        # no_dedup subplot
+        wd_ratio_nd = baselines['workday']['no_dedup'].get(b, 0) / max(sum(baselines['workday']['no_dedup'].values()), 1) * 100
+        we_ratio_nd = baselines['weekend']['no_dedup'].get(b, 0) / max(sum(baselines['weekend']['no_dedup'].values()), 1) * 100
+
+        vals_nd_wd = []
+        vals_nd_we = []
+        for name in names:
+            total = sum(holiday_tg.get(name, {}).values())
+            h_ratio = holiday_tg.get(name, {}).get(b, 0) / max(total, 1) * 100
+            vals_nd_wd.append(h_ratio - wd_ratio_nd)
+            vals_nd_we.append(h_ratio - we_ratio_nd)
+
+        x = np.arange(len(names))
+        width = 0.35
+        ax1.bar(x - width / 2, vals_nd_wd, width, label='vs Workday', color=COLOR_WORKDAY, alpha=0.8)
+        ax1.bar(x + width / 2, vals_nd_we, width, label='vs Weekend', color=COLOR_WEEKEND, alpha=0.8)
+        ax1.axhline(y=0, color='red', linestyle='-', linewidth=0.5)
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(names, rotation=45, ha='right', fontsize=7)
+        ax1.set_ylabel('Diff in % points')
+        ax1.set_title(f'No Dedup — Bucket {b}', fontsize=10)
+        ax1.legend(fontsize=8)
+        ax1.grid(axis='y', alpha=0.3)
+
+        # dedup subplot
+        wd_ratio_d = baselines['workday']['dedup'].get(b, 0) / max(sum(baselines['workday']['dedup'].values()), 1) * 100
+        we_ratio_d = baselines['weekend']['dedup'].get(b, 0) / max(sum(baselines['weekend']['dedup'].values()), 1) * 100
+
+        vals_d_wd = []
+        vals_d_we = []
+        for name in names:
+            total = sum(holiday_tg_dedup.get(name, {}).values())
+            h_ratio = holiday_tg_dedup.get(name, {}).get(b, 0) / max(total, 1) * 100
+            vals_d_wd.append(h_ratio - wd_ratio_d)
+            vals_d_we.append(h_ratio - we_ratio_d)
+
+        ax2.bar(x - width / 2, vals_d_wd, width, label='vs Workday', color=COLOR_WORKDAY, alpha=0.8)
+        ax2.bar(x + width / 2, vals_d_we, width, label='vs Weekend', color=COLOR_WEEKEND, alpha=0.8)
+        ax2.axhline(y=0, color='red', linestyle='-', linewidth=0.5)
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(names, rotation=45, ha='right', fontsize=7)
+        ax2.set_ylabel('Diff in % points')
+        ax2.set_title(f'Dedup — Bucket {b}', fontsize=10)
+        ax2.legend(fontsize=8)
+        ax2.grid(axis='y', alpha=0.3)
+
+        fig.suptitle(f'Per-Holiday Turn Group "{b}" — Ratio Diff from Workday & Weekend', fontsize=12)
+        fig.tight_layout()
+        path = os.path.join(STEP_OUT, f'e4_per_holiday_vs_workday_weekend_turns_bucket_{b}.png')
+        fig.savefig(path)
+        plt.close(fig)
+        log(f"Saved: {path}")
 
     # CSV
     csv_path = os.path.join(STEP_OUT, 'e4_per_holiday_vs_workday_weekend_turns.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['holiday_name', 'num_sessions', 'avg_turns_per_session',
-                     'multi_turn_ratio', 'workday_avg_turns', 'weekend_avg_turns'])
-        for h in holiday_agg:
-            w.writerow([h['name'], h['num_sessions'],
-                        f'{h["avg_turns_per_session"]:.2f}',
-                        f'{h["multi_turn_ratio"]:.2f}%',
-                        f'{baselines["workday"]["avg_turns_per_session"]:.2f}',
-                        f'{baselines["weekend"]["avg_turns_per_session"]:.2f}'])
+        w.writerow(['holiday_name', 'bucket', 'count_no_dedup', 'count_dedup',
+                     'workday_ratio_no_dedup', 'weekend_ratio_no_dedup',
+                     'workday_ratio_dedup', 'weekend_ratio_dedup'])
+        for name in names:
+            for b in TURN_GROUPS:
+                v_nd = holiday_tg.get(name, {}).get(b, 0)
+                v_d = holiday_tg_dedup.get(name, {}).get(b, 0)
+                wd_total_nd = max(sum(baselines['workday']['no_dedup'].values()), 1)
+                we_total_nd = max(sum(baselines['weekend']['no_dedup'].values()), 1)
+                wd_total_d = max(sum(baselines['workday']['dedup'].values()), 1)
+                we_total_d = max(sum(baselines['weekend']['dedup'].values()), 1)
+                w.writerow([name, b, v_nd, v_d,
+                            f'{baselines["workday"]["no_dedup"].get(b, 0) / wd_total_nd * 100:.2f}%',
+                            f'{baselines["weekend"]["no_dedup"].get(b, 0) / we_total_nd * 100:.2f}%',
+                            f'{baselines["workday"]["dedup"].get(b, 0) / wd_total_d * 100:.2f}%',
+                            f'{baselines["weekend"]["dedup"].get(b, 0) / we_total_d * 100:.2f}%'])
     log(f"Saved: {csv_path}")
 
 
@@ -702,31 +906,30 @@ def dim_f3_per_holiday_vs_nonholiday_time(rows: list[dict]):
         p_rows = [r for r in rows if r['session_id'] in sids]
         p_time = _session_time_metrics(p_rows)
         p_time['name'] = name
-        p_time['num_sessions'] = len(sids)
+        p_time['total_sessions'] = len(sids)
         holiday_agg_time.append(p_time)
 
-    holiday_agg_time.sort(key=lambda x: x['num_sessions'], reverse=True)
+    holiday_agg_time.sort(key=lambda x: x['total_sessions'], reverse=True)
 
-    log(f"  Non-holiday: interval {nh_time['avg_interval_seconds']:.0f}s, "
-        f"duration {nh_time['avg_duration_seconds']:.0f}s")
+    # 添加小时单位的字段（用于绘图，原始秒数保留给 CSV）
+    for h in holiday_agg_time:
+        h['avg_interval_hours'] = h['avg_interval_seconds'] / 3600
+        h['avg_duration_hours'] = h['avg_duration_seconds'] / 3600
 
-    # 平均间隔柱状图
-    _plot_per_holiday_turn_bars(
-        holiday_agg_time, nh_time['avg_interval_seconds'] / 3600,
-        'Non-holiday avg', 'avg_interval_seconds',
-        'Avg Interval (hours)',
+    nh_interval_hours = nh_time['avg_interval_seconds'] / 3600
+    nh_duration_hours = nh_time['avg_duration_seconds'] / 3600
+
+    log(f"  Non-holiday: interval {nh_interval_hours:.1f}h, "
+        f"duration {nh_duration_hours:.1f}h")
+
+    # 合并图：上半部分平均间隔，下半部分平均时长
+    _plot_per_holiday_time_combined(
+        holiday_agg_time,
+        nh_interval_hours, nh_duration_hours,
+        'Non-holiday avg',
+        'avg_interval_hours', 'avg_duration_hours',
         'Per-Holiday Avg Question Interval vs Non-Holiday',
-        'f3_per_holiday_vs_nonholiday_interval.png',
-        COLOR_HOLIDAY,
-    )
-
-    # 平均时长柱状图
-    _plot_per_holiday_turn_bars(
-        holiday_agg_time, nh_time['avg_duration_seconds'] / 3600,
-        'Non-holiday avg', 'avg_duration_seconds',
-        'Avg Duration (hours)',
-        'Per-Holiday Avg Session Duration vs Non-Holiday',
-        'f3_per_holiday_vs_nonholiday_duration.png',
+        'f3_per_holiday_vs_nonholiday_time.png',
         COLOR_HOLIDAY,
     )
 
@@ -734,11 +937,13 @@ def dim_f3_per_holiday_vs_nonholiday_time(rows: list[dict]):
     csv_path = os.path.join(STEP_OUT, 'f3_per_holiday_vs_nonholiday_time.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['holiday_name', 'num_sessions', 'avg_interval_seconds',
+        w.writerow(['holiday_name', 'total_sessions', 'valid_interval_sessions',
+                     'valid_duration_sessions', 'avg_interval_seconds',
                      'avg_duration_seconds',
                      'nh_baseline_interval', 'nh_baseline_duration'])
         for h in holiday_agg_time:
-            w.writerow([h['name'], h['num_sessions'],
+            w.writerow([h['name'], h['total_sessions'],
+                        h['valid_interval_sessions'], h['valid_duration_sessions'],
                         f'{h["avg_interval_seconds"]:.0f}',
                         f'{h["avg_duration_seconds"]:.0f}',
                         f'{nh_time["avg_interval_seconds"]:.0f}',
@@ -747,24 +952,105 @@ def dim_f3_per_holiday_vs_nonholiday_time(rows: list[dict]):
 
 
 def dim_f4_per_holiday_vs_workday_weekend_time(rows: list[dict]):
-    """Per-holiday time metrics vs workday & weekend baselines.
-       各节假日时间指标 vs 工作日/周末基线。"""
+    """Per-holiday time metrics vs workday & weekend baselines (heatmap).
+    各节假日时间指标 vs 工作日/周末基线（热力图）。"""
     log("=" * 50)
     log("F4: Per-Holiday Session Time vs Workday & Weekend")
-    # Simplified: just log the baselines, detailed per-holiday left to CSV
+
     session_period = _session_period_series(rows)
+
+    # Compute workday/weekend baselines
+    baselines = {}
     for p in ['workday', 'weekend']:
         p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
         p_rows = [r for r in rows if r['session_id'] in p_sessions]
-        p_time = _session_time_metrics(p_rows)
-        log(f"  {p}: interval {p_time['avg_interval_seconds']:.0f}s, "
-            f"duration {p_time['avg_duration_seconds']:.0f}s")
+        baselines[p] = _session_time_metrics(p_rows)
+        log(f"  {p}: interval {baselines[p]['avg_interval_seconds']:.0f}s, "
+            f"duration {baselines[p]['avg_duration_seconds']:.0f}s")
 
-    log("  (Detailed per-holiday data in CSV)")
+    # Group holiday sessions by name
+    holiday_name_sessions = defaultdict(set)
+    for r in rows:
+        if r['is_seeker'] and r['period'] == 'holiday':
+            name = r['holiday_name'][:6]
+            holiday_name_sessions[name].add(r['session_id'])
+
+    holiday_data = []
+    for name, sids in holiday_name_sessions.items():
+        if len(sids) < MIN_DATA_ROWS // 10:
+            continue
+        p_rows = [r for r in rows if r['session_id'] in sids]
+        p_time = _session_time_metrics(p_rows)
+        p_time['name'] = name
+        p_time['total_sessions'] = len(sids)
+        holiday_data.append(p_time)
+
+    if not holiday_data:
+        log("  No holiday groups")
+        return
+
+    holiday_data.sort(key=lambda x: x['total_sessions'], reverse=True)
+    names = [h['name'] for h in holiday_data]
+
+    # Interval heatmap (rows=holidays, cols=no special split — just show diff from baselines)
+    # Two subplots: interval and duration
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, max(5, len(names) * 0.35 + 1.5)))
+
+    # Interval: diff from workday and weekend
+    wd_interval = baselines['workday']['avg_interval_seconds'] / 3600  # hours
+    we_interval = baselines['weekend']['avg_interval_seconds'] / 3600
+
+    x = np.arange(len(names))
+    width = 0.35
+    interval_wd = [h['avg_interval_seconds'] / 3600 - wd_interval for h in holiday_data]
+    interval_we = [h['avg_interval_seconds'] / 3600 - we_interval for h in holiday_data]
+    ax1.bar(x - width / 2, interval_wd, width, label='vs Workday', color=COLOR_WORKDAY, alpha=0.8)
+    ax1.bar(x + width / 2, interval_we, width, label='vs Weekend', color=COLOR_WEEKEND, alpha=0.8)
+    ax1.axhline(y=0, color='red', linestyle='-', linewidth=0.5)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(names, rotation=45, ha='right', fontsize=8)
+    ax1.set_ylabel('Diff in hours')
+    ax1.set_title('Avg Question Interval Diff from Baseline', fontsize=10)
+    ax1.legend(fontsize=8)
+    ax1.grid(axis='y', alpha=0.3)
+
+    # Duration: diff from workday and weekend
+    wd_duration = baselines['workday']['avg_duration_seconds'] / 3600
+    we_duration = baselines['weekend']['avg_duration_seconds'] / 3600
+    dur_wd = [h['avg_duration_seconds'] / 3600 - wd_duration for h in holiday_data]
+    dur_we = [h['avg_duration_seconds'] / 3600 - we_duration for h in holiday_data]
+    ax2.bar(x - width / 2, dur_wd, width, label='vs Workday', color=COLOR_WORKDAY, alpha=0.8)
+    ax2.bar(x + width / 2, dur_we, width, label='vs Weekend', color=COLOR_WEEKEND, alpha=0.8)
+    ax2.axhline(y=0, color='red', linestyle='-', linewidth=0.5)
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(names, rotation=45, ha='right', fontsize=8)
+    ax2.set_ylabel('Diff in hours')
+    ax2.set_title('Avg Session Duration Diff from Baseline', fontsize=10)
+    ax2.legend(fontsize=8)
+    ax2.grid(axis='y', alpha=0.3)
+
+    fig.suptitle('Per-Holiday Session Time Metrics — Diff from Workday & Weekend', fontsize=12)
+    fig.tight_layout()
+    path = os.path.join(STEP_OUT, 'f4_per_holiday_vs_workday_weekend_time.png')
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+    # CSV
     csv_path = os.path.join(STEP_OUT, 'f4_per_holiday_vs_workday_weekend_time.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['holiday_name', 'avg_interval_seconds', 'avg_duration_seconds'])
+        w.writerow(['holiday_name', 'total_sessions', 'valid_interval_sessions',
+                     'valid_duration_sessions', 'avg_interval_seconds', 'avg_duration_seconds',
+                     'workday_interval', 'weekend_interval', 'workday_duration', 'weekend_duration'])
+        for h in holiday_data:
+            w.writerow([h['name'], h['total_sessions'],
+                        h['valid_interval_sessions'], h['valid_duration_sessions'],
+                        f'{h["avg_interval_seconds"]:.0f}', f'{h["avg_duration_seconds"]:.0f}',
+                        f'{baselines["workday"]["avg_interval_seconds"]:.0f}',
+                        f'{baselines["weekend"]["avg_interval_seconds"]:.0f}',
+                        f'{baselines["workday"]["avg_duration_seconds"]:.0f}',
+                        f'{baselines["weekend"]["avg_duration_seconds"]:.0f}'])
     log(f"Saved: {csv_path}")
 
 
@@ -1087,7 +1373,7 @@ def main():
     log("-" * 40)
     log("Section C: Single-Day / Cross-Day Session Analysis")
     log("-" * 40)
-
+    # 跨日会话
     dim_g1_holiday_vs_nonholiday_day_sessions(rows)              # C1: 节假日vs非节假日
     log("")
     dim_g2_holiday_workday_weekend_day_sessions(rows)            # C2: 节假日vs工作日vs周末

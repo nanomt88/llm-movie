@@ -25,6 +25,7 @@ STEPS = {
     3: "Conversation Analysis",            # 步骤3：会话分析
     4: "Age Distribution Analysis",        # 步骤4：年龄分布分析
     5: "Movie Genre Analysis",             # 步骤5：电影类型分析
+    6: "Movie Daily Analysis",             # 步骤5：电影每日数据
 }
 
 
@@ -54,6 +55,8 @@ def run_step(step_num: int) -> float:
             from movie.step4_age import main as m
         elif step_num == 5:
             from movie.step5_genre import main as m
+        elif step_num == 6:
+            from movie.step6_yearly_monthly import main as m
         else:
             log(f"  Unknown step {step_num}")  # 未知步骤
             return 0.0
@@ -74,11 +77,11 @@ def main():
        解析命令行参数并按顺序运行选中的步骤。"""
     # 创建参数解析器
     parser = argparse.ArgumentParser(
-        description="Movie Analysis Pipeline — Step 1 to Step 5")
+        description="Movie Analysis Pipeline — Step 1 to Step 6")
     # --steps 参数：指定要运行的步骤编号列表
     parser.add_argument(
         '--steps', nargs='+', type=int,
-        help='Steps to run (e.g. --steps 1 3 5). Default: all steps 1-5.')
+        help='Steps to run (e.g. --steps 1 3 5). Default: all steps 1-6.')
     # --skip 参数：指定要跳过的步骤编号列表
     parser.add_argument(
         '--skip', nargs='+', type=int, default=[],
