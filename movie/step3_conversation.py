@@ -1332,11 +1332,11 @@ def _plot_day_session_comparison(
     log(f"Saved: {path}")
 
 
-def dim_f5_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
+def dim_g1_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     """Compare per-day single/cross-day session averages: holiday vs non-holiday.
         比较节假日 vs 非节假日每天的平均单日/跨日会话数。"""
     log("=" * 50)
-    log("F5: Holiday vs Non-Holiday Avg Day Sessions")
+    log("G1: Holiday vs Non-Holiday Avg Day Sessions")
 
     session_period = _session_period_series(rows)
     holiday_sessions = _session_holiday_set(rows)
@@ -1368,12 +1368,12 @@ def dim_f5_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     _plot_day_session_comparison(
         per_day_stats,
         'Avg Single-Day & Cross-Day Sessions per Day: Holiday vs Non-Holiday',
-        'f5_holiday_vs_nonholiday_day_sessions.png',
+        'g1_holiday_vs_nonholiday_day_sessions.png',
         ylabel='Avg per day',
     )
 
     # CSV
-    csv_path = os.path.join(STEP_OUT, 'f5_holiday_vs_nonholiday_day_sessions.csv')
+    csv_path = os.path.join(STEP_OUT, 'g1_holiday_vs_nonholiday_day_sessions.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['group', 'total_days', 'total_sessions', 'single_day',
@@ -1390,11 +1390,11 @@ def dim_f5_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     log(f"Saved: {csv_path}")
 
 
-def dim_f6_holiday_workday_weekend_day_sessions(rows: list[dict]):
+def dim_g2_holiday_workday_weekend_day_sessions(rows: list[dict]):
     """Compare per-day single/cross-day session averages: holiday vs workday vs weekend.
         比较节假日 vs 工作日 vs 周末每天的平均单日/跨日会话数。"""
     log("=" * 50)
-    log("F6: Holiday vs Workday vs Weekend Avg Day Sessions")
+    log("G2: Holiday vs Workday vs Weekend Avg Day Sessions")
 
     session_period = _session_period_series(rows)
     holiday_sessions = _session_holiday_set(rows)
@@ -1421,12 +1421,12 @@ def dim_f6_holiday_workday_weekend_day_sessions(rows: list[dict]):
     _plot_day_session_comparison(
         per_day_stats,
         'Avg Single-Day & Cross-Day Sessions per Day: Holiday vs Workday vs Weekend',
-        'f6_holiday_workday_weekend_day_sessions.png',
+        'g2_holiday_workday_weekend_day_sessions.png',
         ylabel='Avg per day',
     )
 
     # CSV
-    csv_path = os.path.join(STEP_OUT, 'f6_holiday_workday_weekend_day_sessions.csv')
+    csv_path = os.path.join(STEP_OUT, 'g2_holiday_workday_weekend_day_sessions.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['group', 'total_days', 'total_sessions', 'single_day',
@@ -1444,11 +1444,11 @@ def dim_f6_holiday_workday_weekend_day_sessions(rows: list[dict]):
     log(f"Saved: {csv_path}")
 
 
-def dim_f7_per_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
+def dim_g3_per_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     """Per-holiday single/cross-day per-day averages vs non-holiday baseline.
         各节假日每天平均单日/跨日会话数 vs 非节假日基线。"""
     log("=" * 50)
-    log("F7: Per-Holiday Avg Day Sessions vs Non-Holiday")
+    log("G3: Per-Holiday Avg Day Sessions vs Non-Holiday")
 
     session_period = _session_period_series(rows)
     holiday_sessions_f7 = _session_holiday_set(rows)
@@ -1533,13 +1533,13 @@ def dim_f7_per_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     fig.suptitle('Per-Holiday Single-Day & Cross-Day Sessions per Day vs Non-Holiday',
                  fontsize=12)
     fig.tight_layout()
-    path = os.path.join(STEP_OUT, 'f7_per_holiday_vs_nonholiday_day_sessions.png')
+    path = os.path.join(STEP_OUT, 'g3_per_holiday_vs_nonholiday_day_sessions.png')
     fig.savefig(path)
     plt.close(fig)
     log(f"Saved: {path}")
 
     # CSV
-    csv_path = os.path.join(STEP_OUT, 'f7_per_holiday_vs_nonholiday_day_sessions.csv')
+    csv_path = os.path.join(STEP_OUT, 'g3_per_holiday_vs_nonholiday_day_sessions.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['holiday_name', 'total_sessions', 'total_days',
@@ -1557,11 +1557,11 @@ def dim_f7_per_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     log(f"Saved: {csv_path}")
 
 
-def dim_f8_per_holiday_vs_workday_weekend_day_sessions(rows: list[dict]):
+def dim_g4_per_holiday_vs_workday_weekend_day_sessions(rows: list[dict]):
     """Per-holiday single/cross-day per-day averages vs workday & weekend baselines.
         各节假日每天平均单日/跨日会话数 vs 工作日/周末基线。"""
     log("=" * 50)
-    log("F8: Per-Holiday Avg Day Sessions vs Workday & Weekend")
+    log("G4: Per-Holiday Avg Day Sessions vs Workday & Weekend")
 
     session_period = _session_period_series(rows)
     holiday_sessions_f8 = _session_holiday_set(rows)
@@ -1656,13 +1656,13 @@ def dim_f8_per_holiday_vs_workday_weekend_day_sessions(rows: list[dict]):
     fig.suptitle('Per-Holiday Single-Day & Cross-Day Sessions per Day vs Workday & Weekend',
                  fontsize=12)
     fig.tight_layout()
-    path = os.path.join(STEP_OUT, 'f8_per_holiday_vs_workday_weekend_day_sessions.png')
+    path = os.path.join(STEP_OUT, 'g4_per_holiday_vs_workday_weekend_day_sessions.png')
     fig.savefig(path)
     plt.close(fig)
     log(f"Saved: {path}")
 
     # CSV
-    csv_path = os.path.join(STEP_OUT, 'f8_per_holiday_vs_workday_weekend_day_sessions.csv')
+    csv_path = os.path.join(STEP_OUT, 'g4_per_holiday_vs_workday_weekend_day_sessions.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['holiday_name', 'total_sessions', 'total_days',
@@ -1732,13 +1732,13 @@ def main():
     log("Section C: Single-Day / Cross-Day Session Analysis")
     log("-" * 40)
     # 跨日会话
-    dim_f5_holiday_vs_nonholiday_day_sessions(rows)              # C1: 节假日vs非节假日
+    dim_g1_holiday_vs_nonholiday_day_sessions(rows)              # G1: 节假日vs非节假日
     log("")
-    dim_f6_holiday_workday_weekend_day_sessions(rows)            # C2: 节假日vs工作日vs周末
+    dim_g2_holiday_workday_weekend_day_sessions(rows)            # G2: 节假日vs工作日vs周末
     log("")
-    dim_f7_per_holiday_vs_nonholiday_day_sessions(rows)          # C3: 各节假日vs非节假日
+    dim_g3_per_holiday_vs_nonholiday_day_sessions(rows)          # G3: 各节假日vs非节假日
     log("")
-    dim_f8_per_holiday_vs_workday_weekend_day_sessions(rows)     # C4: 各节假日vs工作日/周末
+    dim_g4_per_holiday_vs_workday_weekend_day_sessions(rows)     # G4: 各节假日vs工作日/周末
 
     log("")
     log("=" * 60)

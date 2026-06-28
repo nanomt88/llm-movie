@@ -203,156 +203,156 @@ def _age_hourly_active_users(
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def dim_g1_multi_session_same_day_age(seekers: list[dict], user_ages: dict):
-    """G1: Avg daily users with >=2 sessions on the same day, by age.
-    G1: 长期活跃用户 各年龄段的单日内多次会话(单日多session)平均人数。"""
-    log("=" * 50)
-    log("G1: Multi-Session Same-Day Users by Age (Avg Daily)")
-
-    holiday_dates = set(r['date'] for r in seekers if r['period'] == 'holiday')
-    non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
-
-    h_age = _age_multi_session_avg_daily(seekers, holiday_dates, user_ages)
-    nh_age = _age_multi_session_avg_daily(seekers, non_holiday_dates, user_ages)
-
-    _plot_age_grouped_bars(
-        {'Holiday': h_age, 'Non-holiday': nh_age},
-        'Avg Daily Multi-Session (≥2) Users by Age: Holiday vs Non-Holiday',
-        'g1_multi_session_same_day_age.png',
-    )
-
-    csv_path = os.path.join(STEP_OUT, 'g1_multi_session_same_day_age.csv')
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
-        w = csv.writer(f)
-        w.writerow(['age_segment', 'holiday_avg', 'non_holiday_avg'])
-        for seg in AGE_SEGMENTS:
-            w.writerow([seg, f'{h_age.get(seg, 0):.2f}', f'{nh_age.get(seg, 0):.2f}'])
-    log(f"Saved: {csv_path}")
-
-
-def dim_g2_cross_day_multi_session_age(seekers: list[dict], user_ages: dict):
-    """G2: Avg daily users with sessions across >=2 days, by age.
-    G2: 长期活跃用户 各年龄段的跨天多次会话(跨多天多session)平均人数。"""
-    log("=" * 50)
-    log("G2: Cross-Day Multi-Session Users by Age (Avg Daily)")
-
-    holiday_dates = set(r['date'] for r in seekers if r['period'] == 'holiday')
-    non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
-
-    h_age = _age_cross_day_avg_daily(seekers, holiday_dates, user_ages)
-    nh_age = _age_cross_day_avg_daily(seekers, non_holiday_dates, user_ages)
-
-    _plot_age_grouped_bars(
-        {'Holiday': h_age, 'Non-holiday': nh_age},
-        'Avg Daily Cross-Day (≥2 Days) Users by Age: Holiday vs Non-Holiday',
-        'g2_cross_day_multi_session_age.png',
-    )
-
-    csv_path = os.path.join(STEP_OUT, 'g2_cross_day_multi_session_age.csv')
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
-        w = csv.writer(f)
-        w.writerow(['age_segment', 'holiday_avg', 'non_holiday_avg'])
-        for seg in AGE_SEGMENTS:
-            w.writerow([seg, f'{h_age.get(seg, 0):.2f}', f'{nh_age.get(seg, 0):.2f}'])
-    log(f"Saved: {csv_path}")
-
-
-def dim_g3_per_holiday_multi_session_age(seekers: list[dict], user_ages: dict):
-    """G3: Per-holiday multi-session same-day avg daily by age.
-    G3: 各节假日年龄段的单日多session日均人数对比。"""
-    log("=" * 50)
-    log("G3: Per-Holiday Multi-Session Same-Day Users (Avg Daily)")
-
-    holiday_groups = defaultdict(list)
-    for r in seekers:
-        if r['period'] == 'holiday':
-            name = r['holiday_name'][:6]
-            holiday_groups[name].append(r)
-    holiday_groups = {k: v for k, v in holiday_groups.items() if len(v) >= MIN_DATA_ROWS}
-    if not holiday_groups:
-        log("  No holiday groups")
-        return
-
-    names = sorted(holiday_groups.keys())
-    n = len(names)
-
-    matrix = np.zeros((len(AGE_SEGMENTS), n))
-    for j, name in enumerate(names):
-        dates = set(r['date'] for r in holiday_groups[name])
-        age_avg = _age_multi_session_avg_daily(holiday_groups[name], dates, user_ages)
-        for i, seg in enumerate(AGE_SEGMENTS):
-            matrix[i, j] = age_avg.get(seg, 0)
-
-    fig, ax = plt.subplots(figsize=(max(10, n * 0.6), max(5, len(AGE_SEGMENTS) * 0.5)))
-    im = ax.imshow(matrix, cmap='YlOrRd', aspect='auto', vmin=0)
-    ax.set_xticks(range(n))
-    ax.set_xticklabels(names, rotation=45, ha='right', fontsize=8)
-    ax.set_yticks(range(len(AGE_SEGMENTS)))
-    ax.set_yticklabels(AGE_SEGMENTS, fontsize=8)
-    ax.set_title('Avg Daily Multi-Session (≥2) Users per Holiday by Age', fontsize=11)
-    fig.colorbar(im, ax=ax, shrink=0.6, label='Avg Daily Users')
-    fig.tight_layout()
-    path = os.path.join(STEP_OUT, 'g3_per_holiday_multi_session_age.png')
-    fig.savefig(path)
-    plt.close(fig)
-    log(f"Saved: {path}")
-
-    csv_path = os.path.join(STEP_OUT, 'g3_per_holiday_multi_session_age.csv')
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
-        w = csv.writer(f)
-        w.writerow(['age_segment'] + names)
-        for i, seg in enumerate(AGE_SEGMENTS):
-            w.writerow([seg] + [f'{matrix[i, j]:.2f}' for j in range(n)])
-    log(f"Saved: {csv_path}")
+# def dim_g1_multi_session_same_day_age(seekers: list[dict], user_ages: dict):
+#     """G1: Avg daily users with >=2 sessions on the same day, by age.
+#     G1: 长期活跃用户 各年龄段的单日内多次会话(单日多session)平均人数。"""
+#     log("=" * 50)
+#     log("G1: Multi-Session Same-Day Users by Age (Avg Daily)")
+#
+#     holiday_dates = set(r['date'] for r in seekers if r['period'] == 'holiday')
+#     non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
+#
+#     h_age = _age_multi_session_avg_daily(seekers, holiday_dates, user_ages)
+#     nh_age = _age_multi_session_avg_daily(seekers, non_holiday_dates, user_ages)
+#
+#     _plot_age_grouped_bars(
+#         {'Holiday': h_age, 'Non-holiday': nh_age},
+#         'Avg Daily Multi-Session (≥2) Users by Age: Holiday vs Non-Holiday',
+#         'g1_multi_session_same_day_age.png',
+#     )
+#
+#     csv_path = os.path.join(STEP_OUT, 'g1_multi_session_same_day_age.csv')
+#     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+#         w = csv.writer(f)
+#         w.writerow(['age_segment', 'holiday_avg', 'non_holiday_avg'])
+#         for seg in AGE_SEGMENTS:
+#             w.writerow([seg, f'{h_age.get(seg, 0):.2f}', f'{nh_age.get(seg, 0):.2f}'])
+#     log(f"Saved: {csv_path}")
+#
+#
+# def dim_g2_cross_day_multi_session_age(seekers: list[dict], user_ages: dict):
+#     """G2: Avg daily users with sessions across >=2 days, by age.
+#     G2: 长期活跃用户 各年龄段的跨天多次会话(跨多天多session)平均人数。"""
+#     log("=" * 50)
+#     log("G2: Cross-Day Multi-Session Users by Age (Avg Daily)")
+#
+#     holiday_dates = set(r['date'] for r in seekers if r['period'] == 'holiday')
+#     non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
+#
+#     h_age = _age_cross_day_avg_daily(seekers, holiday_dates, user_ages)
+#     nh_age = _age_cross_day_avg_daily(seekers, non_holiday_dates, user_ages)
+#
+#     _plot_age_grouped_bars(
+#         {'Holiday': h_age, 'Non-holiday': nh_age},
+#         'Avg Daily Cross-Day (≥2 Days) Users by Age: Holiday vs Non-Holiday',
+#         'g2_cross_day_multi_session_age.png',
+#     )
+#
+#     csv_path = os.path.join(STEP_OUT, 'g2_cross_day_multi_session_age.csv')
+#     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+#         w = csv.writer(f)
+#         w.writerow(['age_segment', 'holiday_avg', 'non_holiday_avg'])
+#         for seg in AGE_SEGMENTS:
+#             w.writerow([seg, f'{h_age.get(seg, 0):.2f}', f'{nh_age.get(seg, 0):.2f}'])
+#     log(f"Saved: {csv_path}")
 
 
-def dim_g4_per_holiday_cross_day_age(seekers: list[dict], user_ages: dict):
-    """G4: Per-holiday cross-day session avg daily by age.
-    G4: 各节假日年龄段跨天多session日均人数对比。"""
-    log("=" * 50)
-    log("G4: Per-Holiday Cross-Day Users (Avg Daily)")
+# def dim_g3_per_holiday_multi_session_age(seekers: list[dict], user_ages: dict):
+#     """G3: Per-holiday multi-session same-day avg daily by age.
+#     G3: 各节假日年龄段的单日多session日均人数对比。"""
+#     log("=" * 50)
+#     log("G3: Per-Holiday Multi-Session Same-Day Users (Avg Daily)")
+#
+#     holiday_groups = defaultdict(list)
+#     for r in seekers:
+#         if r['period'] == 'holiday':
+#             name = r['holiday_name'][:6]
+#             holiday_groups[name].append(r)
+#     holiday_groups = {k: v for k, v in holiday_groups.items() if len(v) >= MIN_DATA_ROWS}
+#     if not holiday_groups:
+#         log("  No holiday groups")
+#         return
+#
+#     names = sorted(holiday_groups.keys())
+#     n = len(names)
+#
+#     matrix = np.zeros((len(AGE_SEGMENTS), n))
+#     for j, name in enumerate(names):
+#         dates = set(r['date'] for r in holiday_groups[name])
+#         age_avg = _age_multi_session_avg_daily(holiday_groups[name], dates, user_ages)
+#         for i, seg in enumerate(AGE_SEGMENTS):
+#             matrix[i, j] = age_avg.get(seg, 0)
+#
+#     fig, ax = plt.subplots(figsize=(max(10, n * 0.6), max(5, len(AGE_SEGMENTS) * 0.5)))
+#     im = ax.imshow(matrix, cmap='YlOrRd', aspect='auto', vmin=0)
+#     ax.set_xticks(range(n))
+#     ax.set_xticklabels(names, rotation=45, ha='right', fontsize=8)
+#     ax.set_yticks(range(len(AGE_SEGMENTS)))
+#     ax.set_yticklabels(AGE_SEGMENTS, fontsize=8)
+#     ax.set_title('Avg Daily Multi-Session (≥2) Users per Holiday by Age', fontsize=11)
+#     fig.colorbar(im, ax=ax, shrink=0.6, label='Avg Daily Users')
+#     fig.tight_layout()
+#     path = os.path.join(STEP_OUT, 'g3_per_holiday_multi_session_age.png')
+#     fig.savefig(path)
+#     plt.close(fig)
+#     log(f"Saved: {path}")
+#
+#     csv_path = os.path.join(STEP_OUT, 'g3_per_holiday_multi_session_age.csv')
+#     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+#         w = csv.writer(f)
+#         w.writerow(['age_segment'] + names)
+#         for i, seg in enumerate(AGE_SEGMENTS):
+#             w.writerow([seg] + [f'{matrix[i, j]:.2f}' for j in range(n)])
+#     log(f"Saved: {csv_path}")
 
-    holiday_groups = defaultdict(list)
-    for r in seekers:
-        if r['period'] == 'holiday':
-            name = r['holiday_name'][:6]
-            holiday_groups[name].append(r)
-    holiday_groups = {k: v for k, v in holiday_groups.items() if len(v) >= MIN_DATA_ROWS}
-    if not holiday_groups:
-        log("  No holiday groups")
-        return
 
-    names = sorted(holiday_groups.keys())
-    n = len(names)
-
-    matrix = np.zeros((len(AGE_SEGMENTS), n))
-    for j, name in enumerate(names):
-        dates = set(r['date'] for r in holiday_groups[name])
-        age_avg = _age_cross_day_avg_daily(holiday_groups[name], dates, user_ages)
-        for i, seg in enumerate(AGE_SEGMENTS):
-            matrix[i, j] = age_avg.get(seg, 0)
-
-    fig, ax = plt.subplots(figsize=(max(10, n * 0.6), max(5, len(AGE_SEGMENTS) * 0.5)))
-    im = ax.imshow(matrix, cmap='YlOrRd', aspect='auto', vmin=0)
-    ax.set_xticks(range(n))
-    ax.set_xticklabels(names, rotation=45, ha='right', fontsize=8)
-    ax.set_yticks(range(len(AGE_SEGMENTS)))
-    ax.set_yticklabels(AGE_SEGMENTS, fontsize=8)
-    ax.set_title('Avg Daily Cross-Day (≥2 Days) Users per Holiday by Age', fontsize=11)
-    fig.colorbar(im, ax=ax, shrink=0.6, label='Avg Daily Users')
-    fig.tight_layout()
-    path = os.path.join(STEP_OUT, 'g4_per_holiday_cross_day_age.png')
-    fig.savefig(path)
-    plt.close(fig)
-    log(f"Saved: {path}")
-
-    csv_path = os.path.join(STEP_OUT, 'g4_per_holiday_cross_day_age.csv')
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
-        w = csv.writer(f)
-        w.writerow(['age_segment'] + names)
-        for i, seg in enumerate(AGE_SEGMENTS):
-            w.writerow([seg] + [f'{matrix[i, j]:.2f}' for j in range(n)])
-    log(f"Saved: {csv_path}")
+# def dim_g4_per_holiday_cross_day_age(seekers: list[dict], user_ages: dict):
+#     """G4: Per-holiday cross-day session avg daily by age.
+#     G4: 各节假日年龄段跨天多session日均人数对比。"""
+#     log("=" * 50)
+#     log("G4: Per-Holiday Cross-Day Users (Avg Daily)")
+#
+#     holiday_groups = defaultdict(list)
+#     for r in seekers:
+#         if r['period'] == 'holiday':
+#             name = r['holiday_name'][:6]
+#             holiday_groups[name].append(r)
+#     holiday_groups = {k: v for k, v in holiday_groups.items() if len(v) >= MIN_DATA_ROWS}
+#     if not holiday_groups:
+#         log("  No holiday groups")
+#         return
+#
+#     names = sorted(holiday_groups.keys())
+#     n = len(names)
+#
+#     matrix = np.zeros((len(AGE_SEGMENTS), n))
+#     for j, name in enumerate(names):
+#         dates = set(r['date'] for r in holiday_groups[name])
+#         age_avg = _age_cross_day_avg_daily(holiday_groups[name], dates, user_ages)
+#         for i, seg in enumerate(AGE_SEGMENTS):
+#             matrix[i, j] = age_avg.get(seg, 0)
+#
+#     fig, ax = plt.subplots(figsize=(max(10, n * 0.6), max(5, len(AGE_SEGMENTS) * 0.5)))
+#     im = ax.imshow(matrix, cmap='YlOrRd', aspect='auto', vmin=0)
+#     ax.set_xticks(range(n))
+#     ax.set_xticklabels(names, rotation=45, ha='right', fontsize=8)
+#     ax.set_yticks(range(len(AGE_SEGMENTS)))
+#     ax.set_yticklabels(AGE_SEGMENTS, fontsize=8)
+#     ax.set_title('Avg Daily Cross-Day (≥2 Days) Users per Holiday by Age', fontsize=11)
+#     fig.colorbar(im, ax=ax, shrink=0.6, label='Avg Daily Users')
+#     fig.tight_layout()
+#     path = os.path.join(STEP_OUT, 'g4_per_holiday_cross_day_age.png')
+#     fig.savefig(path)
+#     plt.close(fig)
+#     log(f"Saved: {path}")
+#
+#     csv_path = os.path.join(STEP_OUT, 'g4_per_holiday_cross_day_age.csv')
+#     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+#         w = csv.writer(f)
+#         w.writerow(['age_segment'] + names)
+#         for i, seg in enumerate(AGE_SEGMENTS):
+#             w.writerow([seg] + [f'{matrix[i, j]:.2f}' for j in range(n)])
+#     log(f"Saved: {csv_path}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -360,9 +360,9 @@ def dim_g4_per_holiday_cross_day_age(seekers: list[dict], user_ages: dict):
 # ═══════════════════════════════════════════════════════════════════════
 
 def _plot_age_grouped_bars(
-    stats: dict[str, dict[str, int]], title: str, filename: str):
+    stats: dict[str, dict[str, float]], title: str, filename: str):
     """Grouped bar chart: age segments across groups.
-    分组柱状图：显示不同分组中各年龄段的活跃用户数对比。"""
+    分组柱状图：显示不同分组中各年龄段的日均活跃用户数对比。"""
     groups = list(stats.keys())  # 获取分组名称列表（如 ['Holiday', 'Non-holiday']）
     age_segments = [s for s in AGE_SEGMENTS if s != 'unknown']  # 排除 'unknown' 年龄段
 
@@ -379,11 +379,10 @@ def _plot_age_grouped_bars(
 
     ax.set_xticks(x)  # 设置 x 轴刻度位置
     ax.set_xticklabels(age_segments, fontsize=10)  # 设置 x 轴标签（年龄段名称），字号 10
-    ax.set_ylabel('Active Users (unique)')  # y 轴标签：活跃用户数（独立用户）
+    ax.set_ylabel('Avg Daily Active Users')  # y 轴标签：日均活跃用户数
     ax.set_title(title, fontsize=12)  # 图表标题，字号 12
     ax.legend(fontsize=9)  # 图例，字号 9
     ax.grid(axis='y', alpha=0.3)  # 显示 y 方向网格线，透明度 0.3
-    ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))  # y 轴刻度只显示整数（用户数必须为整数）
 
     fig.tight_layout()  # 自动调整布局，避免元素重叠
     path = os.path.join(STEP_OUT, filename)  # 拼接输出文件路径
@@ -392,76 +391,193 @@ def _plot_age_grouped_bars(
     log(f"Saved: {path}")  # 日志记录保存信息
 
 
+def _plot_age_grouped_bars_two_row(
+    stats_top: dict[str, dict[str, float]],
+    stats_bottom: dict[str, dict[str, float]],
+    title_top: str, title_bottom: str,
+    top_colors: list[str], bottom_colors: list[str],
+    title: str, filename: str):
+    """Two-row grouped bar chart: top and bottom subplots.
+    两行分组柱状图：上半部分和下半部分各一组并排柱。"""
+    age_segments = [s for s in AGE_SEGMENTS if s != 'unknown']
+    x = np.arange(len(age_segments))
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 9), sharex=True)
+
+    # Top subplot
+    groups_top = list(stats_top.keys())
+    width = 0.8 / max(len(groups_top), 1)
+    for i, group in enumerate(groups_top):
+        vals = [stats_top[group].get(seg, 0) for seg in age_segments]
+        offset = (i - (len(groups_top) - 1) / 2) * width
+        ax1.bar(x + offset, vals, width, label=group,
+                color=top_colors[i], alpha=0.8)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(age_segments, fontsize=10)
+    ax1.set_ylabel('Avg Daily Active Users')
+    ax1.set_title(title_top, fontsize=11)
+    ax1.legend(fontsize=9)
+    ax1.grid(axis='y', alpha=0.3)
+
+    # Bottom subplot
+    groups_bottom = list(stats_bottom.keys())
+    width = 0.8 / max(len(groups_bottom), 1)
+    for i, group in enumerate(groups_bottom):
+        vals = [stats_bottom[group].get(seg, 0) for seg in age_segments]
+        offset = (i - (len(groups_bottom) - 1) / 2) * width
+        ax2.bar(x + offset, vals, width, label=group,
+                color=bottom_colors[i], alpha=0.8)
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(age_segments, fontsize=10)
+    ax2.set_ylabel('Avg Daily Active Users')
+    ax2.set_title(title_bottom, fontsize=11)
+    ax2.legend(fontsize=9)
+    ax2.grid(axis='y', alpha=0.3)
+
+    fig.suptitle(title, fontsize=12)
+    fig.tight_layout()
+    path = os.path.join(STEP_OUT, filename)
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+
 def dim_h1_holiday_vs_nonholiday_age(seekers: list[dict], user_ages: dict):
-    """Compare active users by age: holiday vs non-holiday.
-    对比节假日的各年龄段活跃用户数。"""
+    """Compare avg daily active users by age: holiday vs non-holiday.
+    对比节假日 vs 非节假日的各年龄段日均活跃用户数。"""
     log("=" * 50)  # 日志：分隔线
-    log("H1: Holiday vs Non-Holiday Active Users by Age")  # 日志：分析标题
+    log("H1: Holiday vs Non-Holiday Avg Daily Active Users by Age")  # 日志：分析标题
 
     holiday_dates = set(r['date'] for r in seekers if r['period'] == 'holiday')  # 获取所有节假日日期集合
     non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')  # 获取所有非节假日日期集合
+    num_h = max(len(holiday_dates), 1)
+    num_nh = max(len(non_holiday_dates), 1)
 
     h_age = _age_active_users(seekers, holiday_dates, user_ages)  # 计算节假日各年龄段活跃用户数
     nh_age = _age_active_users(seekers, non_holiday_dates, user_ages)  # 计算非节假日各年龄段活跃用户数
 
+    # 转换为日均值
+    h_age_per_day = {seg: count / num_h for seg, count in h_age.items()}
+    nh_age_per_day = {seg: count / num_nh for seg, count in nh_age.items()}
+
     _plot_age_grouped_bars(  # 绘制分组柱状图
-        {'Holiday': h_age, 'Non-holiday': nh_age},  # 数据：节假日 vs 非节假日
-        'Active Users by Age: Holiday vs Non-Holiday',  # 图表标题
+        {'Holiday': h_age_per_day, 'Non-holiday': nh_age_per_day},  # 数据：节假日 vs 非节假日
+        'Avg Daily Active Users by Age: Holiday vs Non-Holiday',  # 图表标题
         'h1_holiday_vs_nonholiday_age.png',  # 输出文件名
     )
 
     csv_path = os.path.join(STEP_OUT, 'h1_holiday_vs_nonholiday_age.csv')  # CSV 输出文件路径
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:  # 以 UTF-8 编码打开 CSV 文件写入
         w = csv.writer(f)  # 创建 CSV 写入器
-        w.writerow(['age_segment', 'holiday', 'non_holiday'])  # 写入表头：年龄段、节假日、非节假日
+        w.writerow(['age_segment', 'holiday_avg_daily', 'non_holiday_avg_daily'])  # 写入表头
         for seg in AGE_SEGMENTS:  # 遍历每个年龄段
-            w.writerow([seg, h_age.get(seg, 0), nh_age.get(seg, 0)])  # 写入该年龄段的数据行
+            w.writerow([seg, f'{h_age_per_day.get(seg, 0):.2f}',
+                        f'{nh_age_per_day.get(seg, 0):.2f}'])  # 写入该年龄段的数据行
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
 
 def dim_h2_holiday_workday_weekend_age(seekers: list[dict], user_ages: dict):
-    """Compare active users by age: holiday vs workday vs weekend.
-    对比节假日 vs 工作日 vs 周末的各年龄段活跃用户数。"""
+    """Compare avg daily active users by age: holiday vs workday vs weekend.
+    对比节假日 vs 工作日 vs 周末的各年龄段日均活跃用户数。"""
     log("=" * 50)  # 日志：分隔线
-    log("H2: Holiday vs Workday vs Weekend Active Users by Age")  # 日志：分析标题
+    log("H2: Holiday vs Workday vs Weekend Avg Daily Active Users by Age")  # 日志：分析标题
 
     period_dates = {}  # 存储各周期的日期集合
-    period_age = {}  # 存储各周期各年龄段的活跃用户数
+    period_age = {}  # 存储各周期各年龄段的日均活跃用户数
     for p in ['holiday', 'workday', 'weekend']:  # 遍历三种周期
         period_dates[p] = set(r['date'] for r in seekers if r['period'] == p)  # 获取该周期的所有日期
-        period_age[p.capitalize()] = _age_active_users(  # 计算该周期各年龄段活跃用户数，键名首字母大写
-            seekers, period_dates[p], user_ages)
-        total = sum(period_age[p.capitalize()].values())  # 计算该周期总活跃用户数
-        log(f"  {p}: {total} total active users")  # 日志输出总数
+        raw = _age_active_users(seekers, period_dates[p], user_ages)  # 计算该周期各年龄段活跃用户数
+        num_days = max(len(period_dates[p]), 1)
+        period_age[p.capitalize()] = {seg: count / num_days for seg, count in raw.items()}  # 转为日均值
+        total = sum(period_age[p.capitalize()].values())  # 计算该周期总日均活跃用户数
+        log(f"  {p}: {total:.2f} avg daily active users")  # 日志输出总数
 
     _plot_age_grouped_bars(  # 绘制分组柱状图
         period_age,  # 数据：Holiday / Workday / Weekend
-        'Active Users by Age: Holiday vs Workday vs Weekend',  # 图表标题
+        'Avg Daily Active Users by Age: Holiday vs Workday vs Weekend',  # 图表标题
         'h2_holiday_workday_weekend_age.png',  # 输出文件名
     )
 
     csv_path = os.path.join(STEP_OUT, 'h2_holiday_workday_weekend_age.csv')  # CSV 输出文件路径
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:  # 以 UTF-8 编码打开 CSV 文件写入
         w = csv.writer(f)  # 创建 CSV 写入器
-        w.writerow(['age_segment', 'holiday', 'workday', 'weekend'])  # 写入表头
+        w.writerow(['age_segment', 'holiday_avg_daily', 'workday_avg_daily', 'weekend_avg_daily'])  # 写入表头
         for seg in AGE_SEGMENTS:  # 遍历每个年龄段
-            w.writerow([seg, period_age['Holiday'].get(seg, 0),  # 写入该年龄段节假日数据
-                        period_age['Workday'].get(seg, 0),  # 工作日数据
-                        period_age['Weekend'].get(seg, 0)])  # 周末数据
+            w.writerow([seg,
+                        f'{period_age["Holiday"].get(seg, 0):.2f}',
+                        f'{period_age["Workday"].get(seg, 0):.2f}',
+                        f'{period_age["Weekend"].get(seg, 0):.2f}'])  # 写入各周期的日均值
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
+
+
+def dim_h1_h2_combined(seekers: list[dict], user_ages: dict):
+    """H1+H2 combined: Holiday vs Non-Holiday (top) + Holiday vs Workday vs Weekend (bottom).
+    H1+H2 合并图：上半部分节假日 vs 非节假日，下半部分节假日 vs 工作日 vs 周末。"""
+    log("=" * 50)
+    log("H1+H2: Combined Age Distribution")
+
+    # H1 stats: holiday vs non-holiday
+    holiday_dates = set(r['date'] for r in seekers if r['period'] == 'holiday')
+    non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
+    num_h = max(len(holiday_dates), 1)
+    num_nh = max(len(non_holiday_dates), 1)
+
+    h_age = _age_active_users(seekers, holiday_dates, user_ages)
+    nh_age = _age_active_users(seekers, non_holiday_dates, user_ages)
+
+    h_per_day = {seg: count / num_h for seg, count in h_age.items()}
+    nh_per_day = {seg: count / num_nh for seg, count in nh_age.items()}
+
+    # H2 stats: holiday vs workday vs weekend
+    period_age = {}
+    for p in ['holiday', 'workday', 'weekend']:
+        dates = set(r['date'] for r in seekers if r['period'] == p)
+        raw = _age_active_users(seekers, dates, user_ages)
+        nd = max(len(dates), 1)
+        period_age[p.capitalize()] = {seg: count / nd for seg, count in raw.items()}
+
+    _plot_age_grouped_bars_two_row(
+        {'Holiday': h_per_day, 'Non-holiday': nh_per_day},
+        period_age,
+        'Holiday vs Non-Holiday',
+        'Holiday vs Workday vs Weekend',
+        [COLOR_HOLIDAY, COLOR_NONHOLIDAY],
+        [COLOR_HOLIDAY, COLOR_WORKDAY, COLOR_WEEKEND],
+        'Avg Daily Active Users by Age',
+        'h1_h2_combined_age.png',
+    )
+
+    # CSV
+    csv_path = os.path.join(STEP_OUT, 'h1_h2_combined_age.csv')
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['age_segment',
+                    'holiday_avg_daily', 'non_holiday_avg_daily',
+                    'workday_avg_daily', 'weekend_avg_daily'])
+        age_segs_plot = [s for s in AGE_SEGMENTS if s != 'unknown']
+        for seg in age_segs_plot:
+            w.writerow([seg,
+                        f'{h_per_day.get(seg, 0):.2f}',
+                        f'{nh_per_day.get(seg, 0):.2f}',
+                        f'{period_age["Workday"].get(seg, 0):.2f}',
+                        f'{period_age["Weekend"].get(seg, 0):.2f}'])
+    log(f"Saved: {csv_path}")
 
 
 def dim_h3_per_holiday_vs_nonholiday_age(seekers: list[dict], user_ages: dict):
     """
-    For each holiday name, show age distribution as stacked bars,
+    For each holiday name, show age distribution as stacked bars (per-day),
     comparing with non-holiday baseline.
-    对每个节假日分别显示各年龄段的活跃用户数（堆叠柱状图），并与非节假日基线对比。
+    对每个节假日分别显示各年龄段的日均活跃用户数（堆叠柱状图），并与非节假日基线对比。
     """
     log("=" * 50)  # 日志：分隔线
-    log("H3: Per-Holiday Age Distribution vs Non-Holiday")  # 日志：分析标题
+    log("H3: Per-Holiday Age Distribution vs Non-Holiday (Avg Daily)")  # 日志：分析标题
 
     non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')  # 获取所有非节假日日期集合
+    num_nh = max(len(non_holiday_dates), 1)
     nh_age = _age_active_users(seekers, non_holiday_dates, user_ages)  # 计算非节假日各年龄段活跃用户数作为基线
+    # 转为日均值
+    nh_age_per_day = {seg: count / num_nh for seg, count in nh_age.items()}
 
     # Group holidays by name
     # 按节假日名称分组
@@ -484,44 +600,50 @@ def dim_h3_per_holiday_vs_nonholiday_age(seekers: list[dict], user_ages: dict):
     age_segs_plot = [s for s in AGE_SEGMENTS if s != 'unknown']  # 排除 'unknown' 年龄段
 
     num_holidays = len(names)  # 节假日数量
-    fig_height = max(5, num_holidays * 0.4)  # 动态计算图表高度
-    fig, axes = plt.subplots(2, 1, figsize=(max(14, num_holidays * 0.5), fig_height + 4))  # 创建上下两个子图
+    fig_height = max(6, num_holidays * 0.4)  # 动态计算图表高度
+    bar_w = 0.6  # 统一柱宽，保证左右子图柱状大小一致
+    fig, axes = plt.subplots(1, 2, figsize=(max(16, num_holidays * 0.7), fig_height))  # 创建左右两个子图
 
-    # Top: holiday age counts
-    # 上图：各节假日的各年龄段活跃用户数（堆叠柱状图）
-    ax1 = axes[0]  # 第一个子图（上方）
+    # Left: holiday age counts (avg daily)
+    # 左图：各节假日的各年龄段日均活跃用户数（堆叠柱状图）
+    ax1 = axes[0]  # 第一个子图（左侧）
     x = np.arange(num_holidays)  # x 轴位置：每个节假日一个位置
     bottom = np.zeros(num_holidays)  # 堆叠基线初始化为全零
     for seg in age_segs_plot:  # 遍历每个年龄段
-        vals = []  # 存储该年龄段在各节假日的人数
+        vals = []  # 存储该年龄段在各节假日的日均值
         for name in names:  # 遍历每个节假日
             group_dates = set(r['date'] for r in holiday_groups[name])  # 获取该节假日的日期集合
+            num_dates = max(len(group_dates), 1)
             age_counts = _age_active_users(holiday_groups[name], group_dates, user_ages)  # 计算该节假日各年龄段活跃用户数
-            vals.append(age_counts.get(seg, 0))  # 获取该年龄段人数
-        ax1.bar(x, vals, bottom=bottom, label=seg, color=AGE_COLORS[seg], alpha=0.8)  # 在该位置堆叠绘制
+            vals.append(age_counts.get(seg, 0) / num_dates)  # 转为日均值
+        ax1.bar(x, vals, width=bar_w, bottom=bottom, label=seg, color=AGE_COLORS[seg], alpha=0.8)  # 在该位置堆叠绘制
         bottom += vals  # 更新堆叠基线
     ax1.set_xticks(x)  # 设置 x 轴刻度位置
     ax1.set_xticklabels(names, rotation=45, ha='right', fontsize=8)  # 设置 x 轴标签（节假日名称），旋转 45 度
-    ax1.set_ylabel('Active Users (unique)')  # y 轴标签
-    ax1.set_title('Per-Holiday Active Users by Age', fontsize=11)  # 子图标题
+    ax1.set_xlim(-0.5, num_holidays - 0.5)
+    ax1.set_ylabel('Avg Daily Active Users')  # y 轴标签
+    ax1.set_title('Per-Holiday Avg Daily Active Users by Age', fontsize=11)  # 子图标题
     ax1.legend(fontsize=8)  # 图例
 
-    # Bottom: non-holiday age counts
-    # 下图：非节假日的各年龄段活跃用户数（作为基线对比）
-    ax2 = axes[1]  # 第二个子图（下方）
-    nh_vals = [nh_age.get(seg, 0) for seg in age_segs_plot]  # 获取非节假日各年龄段人数
-    ax2.bar(['Non-holiday'], [sum(nh_vals)], color='#ced6e0', alpha=0.5, label='Total')  # 绘制非节假日总人数柱状图（背景色）
+    # Right: non-holiday age counts (avg daily)
+    # 右图：非节假日的各年龄段日均活跃用户数（作为基线对比）
+    ax2 = axes[1]  # 第二个子图（右侧）
+    nh_vals = [nh_age_per_day.get(seg, 0) for seg in age_segs_plot]  # 获取非节假日各年龄段日均值
+    ax2.bar([0], [sum(nh_vals)], width=bar_w, color='#ced6e0', alpha=0.5, label='Total')  # 绘制非节假日总日均值柱状图（背景色）
     bottom2 = 0  # 堆叠基线的初始值
     for i, seg in enumerate(age_segs_plot):  # 遍历每个年龄段
-        ax2.bar(['Non-holiday'], [nh_vals[i]], bottom=[bottom2],  # 在该柱子上堆叠
+        ax2.bar([0], [nh_vals[i]], width=bar_w, bottom=[bottom2],  # 在该柱子上堆叠
                 label=seg, color=AGE_COLORS[seg], alpha=0.8)
         bottom2 += nh_vals[i]  # 更新堆叠基线
-    ax2.set_ylabel('Active Users (unique)')  # y 轴标签
-    ax2.set_title('Non-Holiday Baseline: Active Users by Age', fontsize=11)  # 子图标题
+    ax2.set_xticks([0])  # x 轴刻度位置
+    ax2.set_xticklabels(['Non-holiday'], fontsize=9)  # x 轴标签
+    ax2.set_xlim(-0.5, 1.5)
+    ax2.set_ylabel('Avg Daily Active Users')  # y 轴标签
+    ax2.set_title('Non-Holiday Baseline: Avg Daily Active Users by Age', fontsize=11)  # 子图标题
     ax2.legend(fontsize=8)  # 图例
     ax2.grid(axis='y', alpha=0.3)  # y 方向网格线
 
-    fig.suptitle('Per-Holiday Age Distribution vs Non-Holiday Baseline', fontsize=13)  # 总标题
+    fig.suptitle('Per-Holiday Age Distribution vs Non-Holiday Baseline (Avg Daily)', fontsize=13)  # 总标题
     fig.tight_layout()  # 自动调整布局
     path = os.path.join(STEP_OUT, 'h3_per_holiday_vs_nonholiday_age.png')  # 输出文件路径
     fig.savefig(path)  # 保存图片
@@ -533,18 +655,20 @@ def dim_h3_per_holiday_vs_nonholiday_age(seekers: list[dict], user_ages: dict):
     csv_path = os.path.join(STEP_OUT, 'h3_per_holiday_vs_nonholiday_age.csv')  # CSV 文件路径
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:  # 写入 CSV
         w = csv.writer(f)  # 创建 CSV 写入器
-        header = ['holiday_name'] + age_segs_plot + ['total']  # 表头：节假日名称 + 各年龄段 + 总计
+        header = ['holiday_name', 'num_dates'] + age_segs_plot + ['total_avg_daily']  # 表头
         w.writerow(header)  # 写入表头
         for name in names:  # 遍历每个节假日
             group_dates = set(r['date'] for r in holiday_groups[name])  # 获取该节假日日期集合
+            num_dates = max(len(group_dates), 1)
             age_counts = _age_active_users(holiday_groups[name], group_dates, user_ages)  # 计算各年龄段人数
-            row = [name] + [age_counts.get(seg, 0) for seg in age_segs_plot]  # 构建数据行
-            row.append(sum(age_counts.get(seg, 0) for seg in age_segs_plot))  # 添加总计列
+            row = [name, num_dates] + [f'{age_counts.get(seg, 0) / num_dates:.2f}' for seg in age_segs_plot]  # 构建日均值数据行
+            total_avg = sum(age_counts.get(seg, 0) for seg in age_segs_plot) / num_dates
+            row.append(f'{total_avg:.2f}')  # 添加总日均值
             w.writerow(row)  # 写入行
         # Non-holiday baseline
         # 非节假日基线行
-        row = ['non_holiday_baseline'] + [nh_age.get(seg, 0) for seg in age_segs_plot]  # 构建基线数据行
-        row.append(sum(nh_age.get(seg, 0) for seg in age_segs_plot))  # 添加总计
+        row = ['non_holiday_baseline', num_nh] + [f'{nh_age_per_day.get(seg, 0):.2f}' for seg in age_segs_plot]
+        row.append(f'{sum(nh_age_per_day.get(seg, 0) for seg in age_segs_plot):.2f}')  # 添加总日均值
         w.writerow(row)  # 写入行
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
@@ -753,7 +877,7 @@ def dim_i2_hourly_holiday_workday_weekend_age(seekers: list[dict], user_ages: di
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
 
-def dim_i3_per_holiday_hourly_age(seekers: list[dict], user_ages: dict):
+def dim_i3_per_holiday_hourly_age_old(seekers: list[dict], user_ages: dict):
     """
     Per-holiday hourly age distribution vs non-holiday.
     Uses heatmap per age segment.
@@ -825,6 +949,98 @@ def dim_i3_per_holiday_hourly_age(seekers: list[dict], user_ages: dict):
                     diff = h_hourly.get(seg, [0.0]*24)[h] - nh_hourly.get(seg, [0.0]*24)[h]  # 计算差值
                     w.writerow([name, seg, h, f'{diff:.4f}'])  # 写入该行
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
+
+
+def dim_i3_per_holiday_hourly_age(seekers: list[dict], user_ages: dict):
+    """
+    Per-holiday hourly age distribution vs non-holiday.
+    Single vertically-stacked heatmap: rows = age_segment × holiday, cols = 24h.
+    每个节假日的逐小时年龄分布 vs 非节假日基线（垂直堆叠热力图，所有年龄段共享色标）。
+    """
+    log("=" * 50)
+    log("I3: Per-Holiday Hourly Age Heatmaps vs Non-Holiday (Stacked)")
+
+    non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
+    nh_hourly = _age_hourly_active_users(seekers, non_holiday_dates, user_ages)
+
+    holiday_groups = defaultdict(list)
+    for r in seekers:
+        if r['period'] == 'holiday':
+            name = r['holiday_name'][:6]
+            holiday_groups[name].append(r)
+
+    holiday_groups = {k: v for k, v in holiday_groups.items()
+                     if len(v) >= MIN_DATA_ROWS}
+    if not holiday_groups:
+        log("  WARN: No holiday groups")
+        return
+
+    group_names = sorted(holiday_groups.keys())
+    age_segs_plot = [s for s in AGE_SEGMENTS if s != 'unknown']
+
+    # ── 预计算所有 (age_seg, holiday) 的逐小时差值 ──
+    # diff_data: {seg: {name: [24 floats]}}
+    diff_data = {}
+    for seg in age_segs_plot:
+        diff_data[seg] = {}
+        nh_vals = nh_hourly.get(seg, [0.0] * 24)
+        for name in group_names:
+            group_dates = set(r['date'] for r in holiday_groups[name])
+            h_hourly = _age_hourly_active_users(holiday_groups[name], group_dates, user_ages)
+            seg_vals = h_hourly.get(seg, [0.0] * 24)
+            diff_data[seg][name] = [seg_vals[h] - nh_vals[h] for h in range(24)]
+
+    # ── 构建垂直堆叠矩阵：行 = age_seg × holiday, 列 = 24h ──
+    n_holidays = len(group_names)
+    n_segs = len(age_segs_plot)
+    total_rows = n_segs * n_holidays
+    matrix = np.zeros((total_rows, 24))
+    y_labels = []
+
+    for si, seg in enumerate(age_segs_plot):
+        for hi, name in enumerate(group_names):
+            row_idx = si * n_holidays + hi
+            matrix[row_idx] = diff_data[seg][name]
+            y_labels.append(f'{seg}  {name}')
+
+    # ── 全局共享色标范围 ──
+    vmax = max(abs(matrix.min()), abs(matrix.max()), 0.01)
+
+    # ── 绘图 ──
+    fig_h = max(8, total_rows * 0.28 + 3)
+    fig, ax = plt.subplots(figsize=(18, fig_h))
+    im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
+
+    ax.set_xticks(range(24))
+    ax.set_xticklabels(range(24), fontsize=8)
+    ax.set_xlabel('Hour of Day (UTC)')
+    ax.set_yticks(range(total_rows))
+    ax.set_yticklabels(y_labels, fontsize=7)
+
+    # ── 白色分隔线区分不同年龄段 ──
+    for si in range(1, n_segs):
+        y = si * n_holidays - 0.5
+        ax.axhline(y, color='white', linewidth=2)
+
+    fig.colorbar(im, ax=ax, shrink=0.6, label='Diff (Holiday - Non-Holiday)')
+    fig.suptitle('Per-Holiday Hourly Active Users by Age — Diff from Non-Holiday', fontsize=13)
+    fig.tight_layout()
+
+    path = os.path.join(STEP_OUT, 'i3_per_holiday_hourly_age_stacked.png')
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+    # ── CSV（保持不变） ──
+    csv_path = os.path.join(STEP_OUT, 'i3_per_holiday_hourly_age.csv')
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['holiday_name', 'age_segment', 'hour', 'diff_from_nonholiday'])
+        for name in group_names:
+            for seg in age_segs_plot:
+                for h in range(24):
+                    w.writerow([name, seg, h, f'{diff_data[seg][name][h]:.4f}'])
+    log(f"Saved: {csv_path}")
 
 
 def dim_i4_per_holiday_hourly_age_vs_workday_weekend(
@@ -930,24 +1146,22 @@ def main():
     log("Section G: Multi-Session Analysis by Age")
     log("-" * 40)
 
-    dim_g1_multi_session_same_day_age(seekers, user_ages)  # G1：单日多session
-    log("")
-    dim_g2_cross_day_multi_session_age(seekers, user_ages)  # G2：跨天多session
-    log("")
-    dim_g3_per_holiday_multi_session_age(seekers, user_ages)  # G3：各节假日单日多session
-    log("")
-    dim_g4_per_holiday_cross_day_age(seekers, user_ages)  # G4：各节假日跨天多session
+    # dim_g1_multi_session_same_day_age(seekers, user_ages)  # G1：单日多session
+    # log("")
+    # dim_g2_cross_day_multi_session_age(seekers, user_ages)  # G2：跨天多session
+    # log("")
+    # dim_g3_per_holiday_multi_session_age(seekers, user_ages)  # G3：各节假日单日多session
+    # log("")
+    # dim_g4_per_holiday_cross_day_age(seekers, user_ages)  # G4：各节假日跨天多session
 
-    # Section A: Weekly
+    # Section H: Weekly
     # A 部分：周周期分析
     log("")  # 日志：空行
     log("-" * 40)  # 日志：分隔线
-    log("Section A: Weekly - Age Distribution")  # 日志：部分标题
+    log("Section H: Weekly - Age Distribution")  # 日志：部分标题
     log("-" * 40)  # 日志：分隔线
 
-    dim_h1_holiday_vs_nonholiday_age(seekers, user_ages)  # A1：节假日 vs 非节假日
-    log("")
-    dim_h2_holiday_workday_weekend_age(seekers, user_ages)  # A2：节假日 vs 工作日 vs 周末
+    dim_h1_h2_combined(seekers, user_ages)  # A1+A2：合并图 节假日vs非节假日 + 节假日vs工作日vs周末
     log("")
     dim_h3_per_holiday_vs_nonholiday_age(seekers, user_ages)  # A3：每个节假日 vs 非节假日
     log("")
