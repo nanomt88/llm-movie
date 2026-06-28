@@ -105,6 +105,18 @@ def _session_first_date(rows: list[dict]) -> dict[str, str]:
     return first_date
 
 
+def _session_holiday_set(rows: list[dict]) -> set[str]:
+    """
+    Return set of session_ids that have at least one user question on a holiday date.
+    返回至少有一个提问落在法定节假日的所有会话ID集合。
+    """
+    holiday_sessions = set()
+    for r in rows:
+        if r['is_seeker'] and r['period'] == 'holiday':
+            holiday_sessions.add(r['session_id'])
+    return holiday_sessions
+
+
 def _compute_turn_groups(rows: list[dict], dedup: bool = False) -> dict[str, int]:
     """
     Compute session count per turn group bucket.
@@ -156,8 +168,8 @@ def _plot_turn_group_comparison(
     stats: dict[str, dict[str, dict[str, int]]],
     title: str, filename: str):
     """
-    Bar chart comparing turn group distributions across groups.
-    分组柱状图：比较不同组的轮次分布。
+    Bar chart comparing turn group percentage distribution across groups.
+    分组柱状图：比较不同组的轮次分布（百分比）。
     stats: {group_label: {'no_dedup': {bucket: count}, 'dedup': {bucket: count}}}
     """
     groups = list(stats.keys())
@@ -177,25 +189,27 @@ def _plot_turn_group_comparison(
 
     for mode_idx, (mode, ax) in enumerate([('no_dedup', ax1), ('dedup', ax2)]):
         for i, group in enumerate(groups):
-            vals = [stats[group][mode].get(b, 0) for b in buckets]
+            vals_raw = [stats[group][mode].get(b, 0) for b in buckets]
+            total = max(sum(vals_raw), 1)
+            vals_pct = [v / total * 100 for v in vals_raw]
             offset = (i - (n_groups - 1) / 2) * width
             color = group_colors.get(group, f'C{i}')
-            bars = ax.bar(x + offset, vals, width, label=group, color=color, alpha=0.8)
+            bars = ax.bar(x + offset, vals_pct, width, label=group, color=color, alpha=0.8)
             # Annotate with thin black text on small bars avoid clutter
-            for j, v in enumerate(vals):
-                if v > max(max(vals) * 0.05, 5):
-                    ax.text(x[j] + offset, v + max(vals) * 0.01,
-                            f'{v}', ha='center', va='bottom', fontsize=6)
+            for j, v in enumerate(vals_pct):
+                if v > max(max(vals_pct) * 0.05, 1):
+                    ax.text(x[j] + offset, v + max(vals_pct) * 0.01,
+                            f'{v:.1f}%', ha='center', va='bottom', fontsize=6)
 
         mode_label = 'No Dedup (All Rows)' if mode == 'no_dedup' else 'Dedup (Unique Questions)'
         ax.set_xticks(x)
         ax.set_xticklabels(buckets, fontsize=9)
         ax.set_xlabel('Turn Group')
-        ax.set_ylabel('Session Count')
+        ax.set_ylabel('Percentage (%)')
         ax.set_title(mode_label, fontsize=10)
         ax.legend(fontsize=8)
         ax.grid(axis='y', alpha=0.3)
-        ax.yaxis.set_major_formatter(ticker.ScalarFormatter(useMathText=True))
+        ax.yaxis.set_major_formatter(ticker.PercentFormatter(decimals=0))
 
     fig.suptitle(title, fontsize=12)
     fig.tight_layout()
@@ -401,8 +415,8 @@ def dim_e1_holiday_vs_nonholiday_turns(rows: list[dict]):
 
     session_period = _session_period_series(rows)
 
-    holiday_sessions = set(sid for sid, p in session_period.items() if p == 'holiday')
-    non_holiday_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
+    holiday_sessions = _session_holiday_set(rows)
+    non_holiday_sessions = set(session_period.keys()) - holiday_sessions
 
     h_rows = [r for r in rows if r['session_id'] in holiday_sessions]
     nh_rows = [r for r in rows if r['session_id'] in non_holiday_sessions]
@@ -451,8 +465,11 @@ def dim_e2_holiday_workday_weekend_turns(rows: list[dict]):
     log("E2: Holiday vs Workday vs Weekend Turn Groups")
 
     session_period = _session_period_series(rows)
-    period_sessions = {p: set(sid for sid, pp in session_period.items() if pp == p)
-                       for p in ['holiday', 'workday', 'weekend']}
+    holiday_sessions = _session_holiday_set(rows)
+    period_sessions = {'holiday': holiday_sessions}
+    for p in ['workday', 'weekend']:
+        period_sessions[p] = set(sid for sid, pp in session_period.items()
+                                 if pp == p and sid not in holiday_sessions)
 
     stats = {}
     for p in ['holiday', 'workday', 'weekend']:
@@ -514,7 +531,8 @@ def dim_e3_per_holiday_vs_nonholiday_turns(rows: list[dict]):
     log("E3: Per-Holiday Turn Groups vs Non-Holiday")
 
     session_period = _session_period_series(rows)
-    nh_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
+    holiday_sessions = _session_holiday_set(rows)
+    nh_sessions = set(session_period.keys()) - holiday_sessions
     nh_rows = [r for r in rows if r['session_id'] in nh_sessions]
     nh_no_dedup = _compute_turn_groups(nh_rows, dedup=False)
     nh_dedup = _compute_turn_groups(nh_rows, dedup=True)
@@ -590,11 +608,13 @@ def dim_e4_per_holiday_vs_workday_weekend_turns(rows: list[dict]):
     log("E4: Per-Holiday Turn Groups vs Workday & Weekend")
 
     session_period = _session_period_series(rows)
+    holiday_sessions = _session_holiday_set(rows)
 
-    # Compute workday/weekend baselines
+    # Compute workday/weekend baselines (exclude any session with holiday rows)
     baselines = {}
     for p in ['workday', 'weekend']:
-        p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
+        p_sessions = set(sid for sid, pp in session_period.items()
+                         if pp == p and sid not in holiday_sessions)
         p_rows = [r for r in rows if r['session_id'] in p_sessions]
         baselines[p] = {
             'no_dedup': _compute_turn_groups(p_rows, dedup=False),
@@ -834,10 +854,10 @@ def dim_f1_holiday_vs_nonholiday_time(rows: list[dict]):
     log("F1: Holiday vs Non-Holiday Session Time Metrics")
 
     session_period = _session_period_series(rows)
-    h_sessions = set(sid for sid, p in session_period.items() if p == 'holiday')
-    nh_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
+    holiday_sessions = _session_holiday_set(rows)
+    nh_sessions = set(session_period.keys()) - holiday_sessions
 
-    h_rows = [r for r in rows if r['session_id'] in h_sessions]
+    h_rows = [r for r in rows if r['session_id'] in holiday_sessions]
     nh_rows = [r for r in rows if r['session_id'] in nh_sessions]
 
     h_time = _session_time_metrics(h_rows, allow_periods={'holiday'})          # 节假日时间指标
@@ -875,9 +895,14 @@ def dim_f2_holiday_workday_weekend_time(rows: list[dict]):
     log("F2: Holiday vs Workday vs Weekend Session Time")
 
     session_period = _session_period_series(rows)
+    holiday_sessions = _session_holiday_set(rows)
     stats = {}
     for p in ['holiday', 'workday', 'weekend']:
-        p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
+        if p == 'holiday':
+            p_sessions = holiday_sessions
+        else:
+            p_sessions = set(sid for sid, pp in session_period.items()
+                             if pp == p and sid not in holiday_sessions)
         p_rows = [r for r in rows if r['session_id'] in p_sessions]
         stats[p.capitalize()] = _session_time_metrics(p_rows, allow_periods={p})
         log(f"  {p}: interval {stats[p.capitalize()]['avg_interval_seconds']:.0f}s")
@@ -908,6 +933,7 @@ def dim_f3_per_holiday_vs_nonholiday_time(rows: list[dict]):
 
     holiday_agg_time = []                          # 各节假日时间指标列表
     session_period = _session_period_series(rows)
+    holiday_sessions = _session_holiday_set(rows)
     # Group holiday sessions by name（按名称分组节假日会话）
     holiday_name_sessions = defaultdict(set)
     for r in rows:
@@ -915,8 +941,8 @@ def dim_f3_per_holiday_vs_nonholiday_time(rows: list[dict]):
             name = r['holiday_name'][:6]
             holiday_name_sessions[name].add(r['session_id'])
 
-    # 非节假日基线
-    nh_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
+    # 非节假日基线（不含任何有节假日提问的会话）
+    nh_sessions = set(session_period.keys()) - holiday_sessions
     nh_rows = [r for r in rows if r['session_id'] in nh_sessions]
     nh_time = _session_time_metrics(nh_rows, allow_periods={'workday', 'weekend'})
 
@@ -978,11 +1004,13 @@ def dim_f4_per_holiday_vs_workday_weekend_time(rows: list[dict]):
     log("F4: Per-Holiday Session Time vs Workday & Weekend")
 
     session_period = _session_period_series(rows)
+    holiday_sessions = _session_holiday_set(rows)
 
-    # Compute workday/weekend baselines
+    # Compute workday/weekend baselines（不含任何有节假日提问的会话）
     baselines = {}
     for p in ['workday', 'weekend']:
-        p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
+        p_sessions = set(sid for sid, pp in session_period.items()
+                         if pp == p and sid not in holiday_sessions)
         p_rows = [r for r in rows if r['session_id'] in p_sessions]
         baselines[p] = _session_time_metrics(p_rows, allow_periods={p})
         log(f"  {p}: interval {baselines[p]['avg_interval_seconds']:.0f}s, "
@@ -1197,10 +1225,10 @@ def dim_f5_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     log("F5: Holiday vs Non-Holiday Avg Day Sessions")
 
     session_period = _session_period_series(rows)
-    h_sessions = set(sid for sid, p in session_period.items() if p == 'holiday')
-    nh_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
+    holiday_sessions = _session_holiday_set(rows)
+    nh_sessions = set(session_period.keys()) - holiday_sessions
 
-    h_stats = _day_session_stats(rows, h_sessions)          # 节假日原始统计
+    h_stats = _day_session_stats(rows, holiday_sessions)   # 节假日原始统计
     nh_stats = _day_session_stats(rows, nh_sessions)        # 非节假日原始统计
 
     # Per-day averages（每天平均会话数）
@@ -1255,9 +1283,14 @@ def dim_f6_holiday_workday_weekend_day_sessions(rows: list[dict]):
     log("F6: Holiday vs Workday vs Weekend Avg Day Sessions")
 
     session_period = _session_period_series(rows)
+    holiday_sessions = _session_holiday_set(rows)
     raw_stats = {}
     for p in ['holiday', 'workday', 'weekend']:
-        p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
+        if p == 'holiday':
+            p_sessions = holiday_sessions
+        else:
+            p_sessions = set(sid for sid, pp in session_period.items()
+                             if pp == p and sid not in holiday_sessions)
         raw_stats[p] = _day_session_stats(rows, p_sessions)
 
     # Per-day averages（每天平均会话数）
@@ -1304,7 +1337,8 @@ def dim_f7_per_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     log("F7: Per-Holiday Avg Day Sessions vs Non-Holiday")
 
     session_period = _session_period_series(rows)
-    nh_sessions = set(sid for sid, p in session_period.items() if p != 'holiday')
+    holiday_sessions_f7 = _session_holiday_set(rows)
+    nh_sessions = set(session_period.keys()) - holiday_sessions_f7
     nh_stats = _day_session_stats(rows, nh_sessions)
 
     # 非节假日总天数
@@ -1416,12 +1450,14 @@ def dim_f8_per_holiday_vs_workday_weekend_day_sessions(rows: list[dict]):
     log("F8: Per-Holiday Avg Day Sessions vs Workday & Weekend")
 
     session_period = _session_period_series(rows)
+    holiday_sessions_f8 = _session_holiday_set(rows)
 
-    # 工作日/周末基线 per-day
+    # 工作日/周末基线 per-day（不含任何有节假日提问的会话）
     day_counts = _count_days_per_period(rows)
     baselines = {}
     for p in ['workday', 'weekend']:
-        p_sessions = set(sid for sid, pp in session_period.items() if pp == p)
+        p_sessions = set(sid for sid, pp in session_period.items()
+                         if pp == p and sid not in holiday_sessions_f8)
         p_stats = _day_session_stats(rows, p_sessions)
         p_days = day_counts.get(p, 1)
         baselines[p] = {
