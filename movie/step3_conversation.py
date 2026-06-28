@@ -548,39 +548,56 @@ def dim_e3_per_holiday_vs_nonholiday_turns(rows: list[dict]):
     log(f"  Non-holiday baseline (no_dedup): {nh_no_dedup}")
     log(f"  Holidays: {len(names)} groups")
 
-    # Heatmap: rows=holidays, cols=buckets, value = holiday_ratio - nh_ratio
+    # Heatmaps: rows=holidays, cols=buckets, value = holiday_ratio - nh_ratio
+    # 合并为一张图：左 No Dedup，右 Dedup
     nh_total = sum(nh_no_dedup.values())
     nh_total_dedup = sum(nh_dedup.values())
 
-    for mode, tg_dict, nh_tg, nh_total_val, suffix in [
-        ('No Dedup', holiday_tg, nh_no_dedup, nh_total, 'no_dedup'),
-        ('Dedup', holiday_tg_dedup, nh_dedup, nh_total_dedup, 'dedup'),
-    ]:
-        if not tg_dict:
-            continue
-        nh_ratios = {b: nh_tg.get(b, 0) / max(nh_total_val, 1) * 100 for b in TURN_GROUPS}
-        matrix = np.zeros((len(names), len(TURN_GROUPS)))
-        for i, name in enumerate(names):
-            total = sum(tg_dict.get(name, {}).values())
-            for j, b in enumerate(TURN_GROUPS):
-                h_ratio = tg_dict.get(name, {}).get(b, 0) / max(total, 1) * 100
-                matrix[i, j] = h_ratio - nh_ratios[b]
+    nh_ratios = {b: nh_no_dedup.get(b, 0) / max(nh_total, 1) * 100 for b in TURN_GROUPS}
+    nh_ratios_dedup = {b: nh_dedup.get(b, 0) / max(nh_total_dedup, 1) * 100 for b in TURN_GROUPS}
 
-        fig, ax = plt.subplots(figsize=(max(10, len(names) * 0.45), max(5, len(names) * 0.4 + 2)))
-        vmax = max(abs(matrix.min()), abs(matrix.max()), 0.1)
-        im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
-        ax.set_xticks(range(len(TURN_GROUPS)))
-        ax.set_xticklabels(TURN_GROUPS, fontsize=9)
-        ax.set_yticks(range(len(names)))
-        ax.set_yticklabels(names, fontsize=7)
-        ax.set_xlabel('Turn Group')
-        ax.set_title(f'Per-Holiday Turn Group Ratio — Diff from Non-Holiday ({suffix})', fontsize=10)
-        fig.colorbar(im, ax=ax, shrink=0.6, label='Diff in % points')
-        fig.tight_layout()
-        path = os.path.join(STEP_OUT, f'e3_per_holiday_vs_nonholiday_turns_{suffix}.png')
-        fig.savefig(path)
-        plt.close(fig)
-        log(f"Saved: {path}")
+    matrix_nd = np.zeros((len(names), len(TURN_GROUPS)))
+    matrix_d = np.zeros((len(names), len(TURN_GROUPS)))
+    for i, name in enumerate(names):
+        total = sum(holiday_tg.get(name, {}).values())
+        total_d = sum(holiday_tg_dedup.get(name, {}).values())
+        for j, b in enumerate(TURN_GROUPS):
+            h_ratio = holiday_tg.get(name, {}).get(b, 0) / max(total, 1) * 100
+            matrix_nd[i, j] = h_ratio - nh_ratios[b]
+            h_ratio_d = holiday_tg_dedup.get(name, {}).get(b, 0) / max(total_d, 1) * 100
+            matrix_d[i, j] = h_ratio_d - nh_ratios_dedup[b]
+
+    vmax = max(abs(matrix_nd.min()), abs(matrix_nd.max()),
+               abs(matrix_d.min()), abs(matrix_d.max()), 0.1)
+
+    fig, (ax1, ax2) = plt.subplots(
+        1, 2, figsize=(max(12, len(names) * 0.8), max(5, len(names) * 0.4 + 2)),
+        sharey=True,
+    )
+
+    im1 = ax1.imshow(matrix_nd, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
+    ax1.set_xticks(range(len(TURN_GROUPS)))
+    ax1.set_xticklabels(TURN_GROUPS, fontsize=9)
+    ax1.set_yticks(range(len(names)))
+    ax1.set_yticklabels(names, fontsize=7)
+    ax1.set_xlabel('Turn Group')
+    ax1.set_ylabel('Holiday', fontsize=9)
+    ax1.set_title('No Dedup', fontsize=10)
+    fig.colorbar(im1, ax=ax1, shrink=0.6, label='Diff in % points')
+
+    im2 = ax2.imshow(matrix_d, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
+    ax2.set_xticks(range(len(TURN_GROUPS)))
+    ax2.set_xticklabels(TURN_GROUPS, fontsize=9)
+    ax2.set_xlabel('Turn Group')
+    ax2.set_title('Dedup', fontsize=10)
+    fig.colorbar(im2, ax=ax2, shrink=0.6, label='Diff in % points')
+
+    fig.suptitle('Per-Holiday Turn Group Ratio — Diff from Non-Holiday', fontsize=12)
+    fig.tight_layout(rect=[0.04, 0, 1, 0.97])
+    path = os.path.join(STEP_OUT, 'e3_per_holiday_vs_nonholiday_turns.png')
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
 
     # CSV
     csv_path = os.path.join(STEP_OUT, 'e3_per_holiday_vs_nonholiday_turns.csv')
@@ -601,7 +618,7 @@ def dim_e3_per_holiday_vs_nonholiday_turns(rows: list[dict]):
 # ── A4: 各个节假日 VS 工作日 VS 周末 ──────────────────────────────────
 #  A4: Per-Holiday vs Workday & Weekend Turn Groups
 
-def dim_e4_per_holiday_vs_workday_weekend_turns(rows: list[dict]):
+def dim_e4_per_holiday_vs_workday_weekend_turns_old(rows: list[dict]):
     """Per-holiday turn groups vs workday & weekend (heatmap by mode).
     各节假日轮次分组 vs 工作日/周末（热力图）。"""
     log("=" * 50)
@@ -708,6 +725,103 @@ def dim_e4_per_holiday_vs_workday_weekend_turns(rows: list[dict]):
                             f'{baselines["workday"]["dedup"].get(b, 0) / wd_total_d * 100:.2f}%',
                             f'{baselines["weekend"]["dedup"].get(b, 0) / we_total_d * 100:.2f}%'])
     log(f"Saved: {csv_path}")
+
+def dim_e4_per_holiday_vs_workday_weekend_turns(rows: list[dict]):
+    """Per-holiday turn groups vs workday & weekend (heatmap).
+    各节假日轮次分组 vs 工作日/周末（热力图）。"""
+    log("=" * 50)
+    log("E4: Per-Holiday Turn Groups vs Workday & Weekend")
+
+    session_period = _session_period_series(rows)
+    holiday_sessions = _session_holiday_set(rows)
+
+    # Compute workday/weekend baselines (exclude any session with holiday rows)
+    baselines = {}
+    for p in ['workday', 'weekend']:
+        p_sessions = set(sid for sid, pp in session_period.items()
+                         if pp == p and sid not in holiday_sessions)
+        p_rows = [r for r in rows if r['session_id'] in p_sessions]
+        baselines[p] = {
+            'no_dedup': _compute_turn_groups(p_rows, dedup=False),
+            'dedup': _compute_turn_groups(p_rows, dedup=True),
+        }
+        log(f"  {p}: {sum(baselines[p]['no_dedup'].values())} sessions")
+
+    holiday_tg = _holiday_turn_groups(rows, dedup=False)
+    holiday_tg_dedup = _holiday_turn_groups(rows, dedup=True)
+
+    if not holiday_tg:
+        log("  No holiday groups")
+        return
+
+    names = sorted(holiday_tg.keys())
+
+    # ── 2×2 Heatmap: rows=holidays, cols=buckets ──
+    fig, axes = plt.subplots(
+        2, 2, figsize=(max(10, len(TURN_GROUPS) * 1.8), max(8, len(names) * 0.6 + 3)),
+    )
+
+    configs = [
+        (axes[0, 0], 'no_dedup', 'workday', holiday_tg, 'No Dedup — vs Workday'),
+        (axes[0, 1], 'no_dedup', 'weekend', holiday_tg, 'No Dedup — vs Weekend'),
+        (axes[1, 0], 'dedup', 'workday', holiday_tg_dedup, 'Dedup — vs Workday'),
+        (axes[1, 1], 'dedup', 'weekend', holiday_tg_dedup, 'Dedup — vs Weekend'),
+    ]
+
+    for idx, (ax, mode, baseline_name, tg_dict, subtitle) in enumerate(configs):
+        col = idx % 2
+        bl_tg = baselines[baseline_name][mode]
+        bl_total = max(sum(bl_tg.values()), 1)
+        bl_ratios = {b: bl_tg.get(b, 0) / bl_total * 100 for b in TURN_GROUPS}
+
+        matrix = np.zeros((len(names), len(TURN_GROUPS)))
+        for i, name in enumerate(names):
+            total = sum(tg_dict.get(name, {}).values())
+            for j, b in enumerate(TURN_GROUPS):
+                h_ratio = tg_dict.get(name, {}).get(b, 0) / max(total, 1) * 100
+                matrix[i, j] = h_ratio - bl_ratios[b]
+
+        vmax = max(abs(matrix.min()), abs(matrix.max()), 0.1)
+        im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
+        ax.set_xticks(range(len(TURN_GROUPS)))
+        ax.set_xticklabels(TURN_GROUPS, fontsize=8)
+        ax.set_yticks(range(len(names)))
+        ax.set_yticklabels(names if col == 0 else [''] * len(names), fontsize=7)
+        if col == 0:
+            ax.set_ylabel('Holiday', fontsize=9)
+        ax.set_xlabel('Turn Group', fontsize=8)
+        ax.set_title(subtitle, fontsize=9)
+        fig.colorbar(im, ax=ax, shrink=0.6, label='Diff in % points')
+
+    fig.suptitle('Per-Holiday Turn Group Ratio — Diff from Workday & Weekend', fontsize=12)
+    fig.tight_layout(rect=[0.08, 0, 1, 0.97])
+    path = os.path.join(STEP_OUT, 'e4_per_holiday_vs_workday_weekend_turns.png')
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+    # CSV
+    csv_path = os.path.join(STEP_OUT, 'e4_per_holiday_vs_workday_weekend_turns.csv')
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['holiday_name', 'bucket', 'count_no_dedup', 'count_dedup',
+                     'workday_ratio_no_dedup', 'weekend_ratio_no_dedup',
+                     'workday_ratio_dedup', 'weekend_ratio_dedup'])
+        for name in names:
+            for b in TURN_GROUPS:
+                v_nd = holiday_tg.get(name, {}).get(b, 0)
+                v_d = holiday_tg_dedup.get(name, {}).get(b, 0)
+                wd_total_nd = max(sum(baselines['workday']['no_dedup'].values()), 1)
+                we_total_nd = max(sum(baselines['weekend']['no_dedup'].values()), 1)
+                wd_total_d = max(sum(baselines['workday']['dedup'].values()), 1)
+                we_total_d = max(sum(baselines['weekend']['dedup'].values()), 1)
+                w.writerow([name, b, v_nd, v_d,
+                            f'{baselines["workday"]["no_dedup"].get(b, 0) / wd_total_nd * 100:.2f}%',
+                            f'{baselines["weekend"]["no_dedup"].get(b, 0) / we_total_nd * 100:.2f}%',
+                            f'{baselines["workday"]["dedup"].get(b, 0) / wd_total_d * 100:.2f}%',
+                            f'{baselines["weekend"]["dedup"].get(b, 0) / we_total_d * 100:.2f}%'])
+    log(f"Saved: {csv_path}")
+# ... existing code ...
 
 
 # ═══════════════════════════════════════════════════════════════════════
