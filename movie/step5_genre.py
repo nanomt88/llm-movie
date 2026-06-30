@@ -9,6 +9,7 @@ Step 5: Movie Genre Analysis
   - 节假日 VS 工作日 VS 周末 各类型影片被提及频次对比
   - 各个节假日 VS 非节假日 各类型影片被提及频次对比
   - 各个节假日 VS 工作日 VS 周末 各类型影片被提及频次对比
+  - 各个节假日 × 各类型影片 提及次数热力图
 
 日周期-小时段 + 影片类型 (0-24h):
   - 节假日 VS 非节假日 各时间段各类型影片被提及频次对比
@@ -28,6 +29,8 @@ import re  # 正则表达式模块，用于字符串匹配
 from collections import defaultdict, Counter  # defaultdict：带默认值的字典；Counter：计数工具
 
 import numpy as np  # 数值计算库，用于数组和矩阵运算
+import pandas as pd  # 数据分析库，用于透视表和数据处理
+import seaborn as sns  # 统计可视化库，用于热力图绘制
 import matplotlib  # 数据可视化基础库
 matplotlib.use('Agg')  # 使用非交互式后端 Agg（适用于无 GUI 环境的图片生成）
 import matplotlib.pyplot as plt  # pyplot 接口，用于绘制图表
@@ -490,6 +493,105 @@ def dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres: list[dict]):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  J5: 节假日 × 电影类型 热力图
+#  J5: Per-Holiday Genre Mention Heatmap
+# ═══════════════════════════════════════════════════════════════════════
+
+def dim_j5_per_holiday_genre_heatmap(seeker_genres: list[dict]):
+    """
+    Heatmap: x=holidays, y=genres, values=avg daily mention counts (per day).
+    Both axes sorted descending by total avg daily mentions.
+    热力图：横轴为各个节假日，纵轴为各种电影类型，单元格值=日均提及次数。
+    X/Y 轴均按日均提及总数降序排列。
+    Args:
+        seeker_genres: 带电影类型信息的用户提问记录列表
+    """
+    log("=" * 50)
+    log("J5: Per-Holiday Genre Avg Daily Heatmap")
+
+    # ── 按节假日名称分组 ──
+    # 按节假日名称（前 6 字符）分组
+    holiday_groups = defaultdict(list)
+    for r in seeker_genres:
+        if r['period'] == 'holiday':
+            name = r['holiday_name'][:6]
+            holiday_groups[name].append(r)
+    holiday_groups = {k: v for k, v in holiday_groups.items()
+                      if len(v) >= MIN_DATA_ROWS}
+    if not holiday_groups:
+        log("  No holiday groups with sufficient data")
+        return
+
+    names = sorted(holiday_groups.keys())
+    log(f"  {len(names)} holidays with sufficient data")
+
+    # ── 确定全局热门类型（前 TOP_N_GENRES 个）──
+    all_genre_totals: Counter = Counter()
+    for r in seeker_genres:
+        for g in r.get('genres', {'unknown'}):
+            all_genre_totals[g] += 1
+    top_genres = [g for g, _ in all_genre_totals.most_common(TOP_N_GENRES)]
+    log(f"  {len(top_genres)} genres")
+
+    # ── 构建透视表：行=类型，列=节假日，值=日均提及次数 ──
+    data_rows = []
+    for name in names:
+        group_dates = set(r['date'] for r in holiday_groups[name])
+        num_dates = max(len(group_dates), 1)
+        gc = _genre_mention_counts(holiday_groups[name], group_dates)
+        for g in top_genres:
+            data_rows.append({
+                'genre': g,
+                'holiday': name,
+                'count': gc.get(g, 0) / num_dates,  # 转为日均值
+            })
+
+    df = pd.DataFrame(data_rows)
+    pivot = df.pivot_table(
+        index='genre',
+        columns='holiday',
+        values='count',
+        aggfunc='sum',
+        fill_value=0,
+    )
+
+    # ── 双轴降序排列 ──
+    # Y 轴（类型）：按所有节假日总日均提及次数降序
+    pivot = pivot.loc[pivot.sum(axis=1).sort_values(ascending=False).index]
+    # X 轴（节假日）：按所有类型总日均提及次数降序
+    pivot = pivot[pivot.sum(axis=0).sort_values(ascending=False).index]
+
+    log(f"  Heatmap size: {pivot.shape[0]} genres x {pivot.shape[1]} holidays")
+
+    # ── 绘制热力图 ──
+    fig, ax = plt.subplots(figsize=(
+        max(8, pivot.shape[1] * 1.2),
+        max(5, pivot.shape[0] * 0.55),
+    ))
+    sns.heatmap(
+        pivot, annot=True, fmt='.1f', cmap='YlOrRd',
+        linewidths=0.5, ax=ax,
+        cbar_kws={'label': 'Avg Daily Mentions'},
+    )
+    ax.set_title('Per-Holiday Genre Avg Daily Mentions', fontsize=14, pad=16)
+    ax.set_xlabel('Holiday', fontsize=11)
+    ax.set_ylabel('Genre', fontsize=11)
+    plt.xticks(rotation=30, ha='right')
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+
+    path = os.path.join(STEP_OUT, 'j5_per_holiday_genre_heatmap.png')
+    fig.savefig(path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+    # ── CSV（日均值）──
+    csv_path = os.path.join(STEP_OUT, 'j5_per_holiday_genre_heatmap.csv')
+    pivot.to_csv(csv_path, encoding='utf-8-sig', float_format='%.2f')
+    log(f"Saved: {csv_path}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  B: Hourly genre analysis  B：逐小时类型分析
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -794,13 +896,14 @@ def dim_k4_per_holiday_hourly_genre_vs_workday_weekend(
 #  Main  主函数入口
 # ═══════════════════════════════════════════════════════════════════════
 
-def main():
+def main(data: dict = None):
     log("=" * 60)  # 日志：分隔线
     log("Step 5: Movie Genre Analysis")  # 日志：步骤标题
     log("=" * 60)  # 日志：分隔线
 
-    from movie.data_loader import load_all  # 延迟导入数据加载函数
-    data = load_all()  # 加载所有数据
+    if data is None:
+        from movie.data_loader import load_all  # 延迟导入数据加载函数
+        data = load_all()  # 加载所有数据
     seekers = data['seekers']  # 获取用户提问记录列表
     rows = data['rows']  # 获取所有行（包括系统回复）
     movie_info = data['movie_info']  # 获取电影信息字典（含类型信息）
@@ -823,8 +926,8 @@ def main():
     dim_j3_per_holiday_vs_nonholiday_genre(seeker_genres)  # A3：每个节假日 vs 非节假日
     log("")
     dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres)  # A4：每个节假日 vs 工作日和周末
-
-    # Section B: Hourly
+    log("")
+    dim_j5_per_holiday_genre_heatmap(seeker_genres)            # J5：热力图-节假日×电影类型
     # B 部分：逐小时分析
     log("")
     log("-" * 40)

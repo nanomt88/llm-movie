@@ -1127,13 +1127,14 @@ def dim_i4_per_holiday_hourly_age_vs_workday_weekend(
 #  Main  主函数入口
 # ═══════════════════════════════════════════════════════════════════════
 
-def main():
+def main(data: dict = None):
     log("=" * 60)  # 日志：分隔CCCCDDDD线
     log("Step 4: Age Distribution Analysis")  # 日志：步骤标题
     log("=" * 60)  # 日志：分隔线
 
-    from movie.data_loader import load_all  # 延迟导入数据加载函数
-    data = load_all()  # 加载所有数据
+    if data is None:
+        from movie.data_loader import load_all  # 延迟导入数据加载函数
+        data = load_all()  # 加载所有数据
     seekers = data['seekers']  # 获取用户提问记录列表
     user_ages = data['user_ages']  # 获取用户年龄映射字典
 

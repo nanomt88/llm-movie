@@ -11,17 +11,22 @@ Step 1: Question Frequency & Hourly Access Analysis
   各个节假日 VS 非节假日 平均提问次数对比 (grouped bar)
   各个节假日 VS 工作日 VS 周末 平均提问次数对比 (grouped bar)
 
+全部/周周期 + 单词数分组:
+  节假日 VS 非节假日 VS 工作日 VS 周末 单词数分布 (grouped bar)
+  各个节假日 VS 非节假日 VS 工作日 VS 周末 单词数分布 (grouped bar)
+
 日周期-小时段 + 访问次数:
   节假日 VS 非节假日 各个时间段(0-24h)平均提问次数对比
   节假日 VS 工作日 VS 周末 各个时间段平均提问次数对比
   各个节假日 VS 非节假日 各个时间段平均提问次数对比 (heatmap)
   各个节假日 VS 工作日 VS 周末 各个时间段平均提问次数对比 (heatmap)
 
-Output: output/movie/step1/*.png + CSV
-输出目录：output/movie/step1/，包含 PNG 图表和 CSV 数据文件
+Output: output/movie/step1/*.png + CSV (A5-A6 added for word-length analysis)
+输出目录：output/movie/step1/，包含 PNG 图表和 CSV 数据文件（A5-A6 新增单词数分析）
 """
 
 import os                          # 操作系统接口，用于路径拼接和目录创建
+import re                          # 正则表达式，用于文本清理
 import csv                         # CSV 文件读写，用于保存数值结果
 from collections import defaultdict, Counter  # 默认字典和计数器
 from datetime import datetime, timezone       # 日期时间与时区处理
@@ -49,6 +54,11 @@ COLOR_NONHOLIDAY = '#74b9ff'       # 非节假日：蓝色
 COLOR_WORKDAY = '#feca57'          # 工作日：黄色
 COLOR_WEEKEND = '#48dbfb'          # 周末：青色
 HOLIDAY_CMAP = 'Set2'              # 节假日组柱状图使用的色图
+
+# ── Word length bucket definitions（单词数分组定义）─────────────────────
+WORD_LEN_BUCKETS = [(1, 10), (11, 30), (31, 100), (101, float('inf'))]
+WORD_LEN_LABELS = ['1-10', '11-30', '31-100', '100+']
+BUCKET_COLORS = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3']
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -107,6 +117,69 @@ def _grouped_daily_questions(seekers: list[dict]) -> dict:
             groups['weekend'][d] += 1
             groups['non_holiday'][d] += 1
     return groups
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Helper: clean & count English words (for word-length analysis)
+#  辅助函数：清理文本并统计英文单词数（供单词数分析使用）
+# ═══════════════════════════════════════════════════════════════════════
+
+def _clean_word_count(text: str) -> int:
+    """
+    Count English words after removing movie IDs, special chars, emojis.
+    统计英文单词数，去除电影ID、特殊字符、表情符号等。
+    Args:
+        text: 原始文本（通常为 proc_text 字段）
+    Returns:
+        英文单词数（仅保留 a-zA-Z 字符构成的单词）
+    """
+    if not text:
+        return 0
+    # Remove movie IDs (tt followed by digits) which appear in proc_text
+    text = re.sub(r'tt\d+', ' ', text)
+    # Keep only letters and spaces — strips digits, punctuation, emojis
+    cleaned = re.sub(r'[^a-zA-Z\s]', ' ', text)
+    # Collapse multiple spaces
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    if not cleaned:
+        return 0
+    return len(cleaned.split())
+
+
+def _word_len_distribution(seekers: list[dict], date_set: set) -> list[float]:
+    """
+    Compute per-day average questions in each word-length bucket for a date set.
+    计算指定日期集合中每个单词数分组的日均提问数。
+    Args:
+        seekers:  提问者数据行列表
+        date_set: 目标日期集合
+    Returns:
+        [avg_1_10, avg_11_30, avg_31_100, avg_100+] 四个分组的日均提问数
+    """
+    daily_bucket_counts = defaultdict(lambda: [0, 0, 0, 0])  # date -> [c1, c2, c3, c4]
+
+    for r in seekers:
+        if r['date'] not in date_set:
+            continue
+        wc = _clean_word_count(r.get('proc_text', ''))
+        if wc == 0:
+            continue
+        # Find which bucket this word count falls into
+        for i, (lo, hi) in enumerate(WORD_LEN_BUCKETS):
+            if lo <= wc <= hi:
+                daily_bucket_counts[r['date']][i] += 1
+                break
+
+    num_days = len(date_set)
+    if num_days == 0:
+        return [0.0, 0.0, 0.0, 0.0]
+
+    totals = [0.0, 0.0, 0.0, 0.0]
+    for day_buckets in daily_bucket_counts.values():
+        for i in range(4):
+            totals[i] += day_buckets[i]
+
+    return [t / num_days for t in totals]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -402,6 +475,232 @@ def dim_a4_per_holiday_vs_workday_weekend(seekers: list[dict]):
         for h in holiday_agg:
             w.writerow([h['name'], f'{h["avg_daily"]:.2f}', h['num_dates'],
                         h['total_questions'], f'{wd_avg:.2f}', f'{we_avg:.2f}'])
+    log(f"Saved: {csv_path}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  A5: 节假日 VS 非节假日 / VS 工作日周末 平均提问单词数分组 (Grouped Bar)
+#  A5: Holiday vs Non-Holiday / vs Workday-Weekend — Word Length
+# ═══════════════════════════════════════════════════════════════════════
+
+def dim_a5_holiday_length(seekers: list[dict]):
+    """
+    Two-panel bar chart: left=holiday vs non-holiday, right=holiday vs workday vs weekend,
+    showing avg daily questions by word-length groups (1-10, 11-30, 31-100, 100+).
+    双面板柱状图：左=节假日 vs 非节假日，右=节假日 vs 工作日 vs 周末
+    展示各单词数分组的日均提问数。
+    Args:
+        seekers: 提问者数据行列表
+    """
+    log("=" * 50)
+    log("A5: Holiday vs Non-Holiday vs Workday vs Weekend — Word Length Distribution")
+
+    holiday_dates = set(r['date'] for r in seekers if r['period'] == 'holiday')
+    non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
+    workday_dates = set(r['date'] for r in seekers if r['period'] == 'workday')
+    weekend_dates = set(r['date'] for r in seekers if r['period'] == 'weekend')
+
+    h_dist = _word_len_distribution(seekers, holiday_dates)
+    nh_dist = _word_len_distribution(seekers, non_holiday_dates)
+    wd_dist = _word_len_distribution(seekers, workday_dates)
+    we_dist = _word_len_distribution(seekers, weekend_dates)
+
+    log(f"  Holiday: {[f'{v:.2f}' for v in h_dist]}")
+    log(f"  Non-holiday: {[f'{v:.2f}' for v in nh_dist]}")
+    log(f"  Workday: {[f'{v:.2f}' for v in wd_dist]}")
+    log(f"  Weekend: {[f'{v:.2f}' for v in we_dist]}")
+    log(f"  Holiday dates: {len(holiday_dates)}, Non-holiday: {len(non_holiday_dates)}, "
+        f"Workday: {len(workday_dates)}, Weekend: {len(weekend_dates)}")
+
+    x = np.arange(4)
+    width_2 = 0.35
+    width_3 = 0.25
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # ── Left: Holiday vs Non-holiday ──
+    b1 = ax1.bar(x - width_2 / 2, h_dist, width_2, label='Holiday',
+                 color=COLOR_HOLIDAY, alpha=0.85, edgecolor='white', linewidth=0.5)
+    b2 = ax1.bar(x + width_2 / 2, nh_dist, width_2, label='Non-holiday',
+                 color=COLOR_NONHOLIDAY, alpha=0.85, edgecolor='white', linewidth=0.5)
+    for bar, v in zip(b1, h_dist):
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                 f'{v:.1f}', ha='center', va='bottom', fontsize=8)
+    for bar, v in zip(b2, nh_dist):
+        ax1.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                 f'{v:.1f}', ha='center', va='bottom', fontsize=8)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(WORD_LEN_LABELS)
+    ax1.set_ylabel('Avg Daily Questions')
+    ax1.set_title('Holiday vs Non-Holiday', fontsize=12)
+    ax1.legend(fontsize=9)
+    ax1.grid(axis='y', alpha=0.3)
+
+    # ── Right: Holiday vs Workday vs Weekend ──
+    b3 = ax2.bar(x - width_3, h_dist, width_3, label='Holiday',
+                 color=COLOR_HOLIDAY, alpha=0.85, edgecolor='white', linewidth=0.5)
+    b4 = ax2.bar(x, wd_dist, width_3, label='Workday',
+                 color=COLOR_WORKDAY, alpha=0.85, edgecolor='white', linewidth=0.5)
+    b5 = ax2.bar(x + width_3, we_dist, width_3, label='Weekend',
+                 color=COLOR_WEEKEND, alpha=0.85, edgecolor='white', linewidth=0.5)
+    for bar, v in zip(b3, h_dist):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                 f'{v:.1f}', ha='center', va='bottom', fontsize=7)
+    for bar, v in zip(b4, wd_dist):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                 f'{v:.1f}', ha='center', va='bottom', fontsize=7)
+    for bar, v in zip(b5, we_dist):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                 f'{v:.1f}', ha='center', va='bottom', fontsize=7)
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(WORD_LEN_LABELS)
+    ax2.set_ylabel('Avg Daily Questions')
+    ax2.set_title('Holiday vs Workday vs Weekend', fontsize=12)
+    ax2.legend(fontsize=9)
+    ax2.grid(axis='y', alpha=0.3)
+
+    fig.suptitle('Avg Daily Questions by Word Count Group', fontsize=13)
+    fig.tight_layout()
+    path = os.path.join(STEP_OUT, 'a5_holiday_vs_nonholiday_length.png')
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+    # ── CSV ──
+    csv_path = os.path.join(STEP_OUT, 'a5_holiday_vs_nonholiday_length.csv')
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['group', 'num_days', 'bucket_1_10', 'bucket_11_30',
+                     'bucket_31_100', 'bucket_100+'])
+        for label, nd, dist in [
+            ('holiday', len(holiday_dates), h_dist),
+            ('non_holiday', len(non_holiday_dates), nh_dist),
+            ('workday', len(workday_dates), wd_dist),
+            ('weekend', len(weekend_dates), we_dist),
+        ]:
+            w.writerow([label, nd] + [f'{v:.4f}' for v in dist])
+    log(f"Saved: {csv_path}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  A6: 各个节假日 VS 非节假日 / VS 工作日周末 单词数分布 (Grouped Bar)
+#  A6: Per-Holiday vs Non-Holiday / vs Workday-Weekend — Word Length
+# ═══════════════════════════════════════════════════════════════════════
+
+def dim_a6_per_holiday_length(seekers: list[dict]):
+    """
+    Two-panel figure: top=per-holiday vs non-holiday, bottom=per-holiday vs workday & weekend,
+    showing word-length distribution across 4 buckets.
+    For each holiday, 4 grouped bars (one per bucket) with baseline reference lines.
+    双面板图：上=各节假日 vs 非节假日，下=各节假日 vs 工作日&周末 单词数分布对比。
+    Args:
+        seekers: 提问者数据行列表
+    """
+    log("=" * 50)
+    log("A6: Per-Holiday Word Length Distribution — (top: vs Non-Holiday, bottom: vs Workday/Weekend)")
+
+    holiday_agg = _aggregate_holiday_names(seekers)
+    if not holiday_agg:
+        log("  WARN: No holiday data")
+        return
+
+    # Baselines
+    non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
+    workday_dates = set(r['date'] for r in seekers if r['period'] == 'workday')
+    weekend_dates = set(r['date'] for r in seekers if r['period'] == 'weekend')
+    nh_dist = _word_len_distribution(seekers, non_holiday_dates)
+    wd_dist = _word_len_distribution(seekers, workday_dates)
+    we_dist = _word_len_distribution(seekers, weekend_dates)
+
+    # Per-holiday distributions
+    names = []
+    h_dists = []   # list of [4-element dist] per holiday
+    for h in holiday_agg:
+        names.append(h['name'])
+        h_dists.append(_word_len_distribution(seekers, h['dates']))
+
+    num_h = len(names)
+    log(f"  {num_h} holidays")
+    log(f"  Baselines — nh: {[f'{v:.2f}' for v in nh_dist]}, "
+        f"wd: {[f'{v:.2f}' for v in wd_dist]}, "
+        f"we: {[f'{v:.2f}' for v in we_dist]}")
+
+    x = np.arange(num_h)
+    width = 0.18  # 4 bars per holiday group
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(max(14, num_h * 0.6), 10))
+
+    # ── Top: Per-holiday vs Non-holiday ──
+    for i in range(4):
+        vals = [d[i] for d in h_dists]
+        ax1.bar(x + (i - 1.5) * width, vals, width,
+                label=WORD_LEN_LABELS[i], color=BUCKET_COLORS[i],
+                alpha=0.85, edgecolor='white', linewidth=0.3)
+    # Non-holiday baselines as dashed lines
+    for i in range(4):
+        ax1.axhline(y=nh_dist[i], color=BUCKET_COLORS[i], linestyle='--',
+                    linewidth=1.5, alpha=0.6)
+    # Add a custom legend entry for baselines
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+    legend_elements = (
+        [Patch(facecolor=BUCKET_COLORS[i], alpha=0.85, label=WORD_LEN_LABELS[i])
+         for i in range(4)]
+        + [Line2D([0], [0], color='gray', linestyle='--', linewidth=1.5, label='Non-holiday baseline')]
+    )
+    ax1.legend(handles=legend_elements, fontsize=8, ncol=3)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(names, rotation=45, ha='right', fontsize=9)
+    ax1.set_ylabel('Avg Daily Questions')
+    ax1.set_title('Per-Holiday Word Length Distribution vs Non-Holiday (dashed)', fontsize=12)
+    ax1.grid(axis='y', alpha=0.3)
+
+    # ── Bottom: Per-holiday vs Workday & Weekend ──
+    for i in range(4):
+        vals = [d[i] for d in h_dists]
+        ax2.bar(x + (i - 1.5) * width, vals, width,
+                label=WORD_LEN_LABELS[i], color=BUCKET_COLORS[i],
+                alpha=0.85, edgecolor='white', linewidth=0.3)
+    for i in range(4):
+        ax2.axhline(y=wd_dist[i], color=BUCKET_COLORS[i], linestyle=':',
+                    linewidth=1.5, alpha=0.6)
+        ax2.axhline(y=we_dist[i], color=BUCKET_COLORS[i], linestyle='-.',
+                    linewidth=1.5, alpha=0.6)
+    legend_elements2 = (
+        [Patch(facecolor=BUCKET_COLORS[i], alpha=0.85, label=WORD_LEN_LABELS[i])
+         for i in range(4)]
+        + [Line2D([0], [0], color='gray', linestyle=':', linewidth=1.5, label='Workday baseline'),
+           Line2D([0], [0], color='gray', linestyle='-.', linewidth=1.5, label='Weekend baseline')]
+    )
+    ax2.legend(handles=legend_elements2, fontsize=8, ncol=3)
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(names, rotation=45, ha='right', fontsize=9)
+    ax2.set_ylabel('Avg Daily Questions')
+    ax2.set_title('Per-Holiday Word Length Distribution vs Workday(:) / Weekend(-.) Baseline', fontsize=12)
+    ax2.grid(axis='y', alpha=0.3)
+
+    fig.suptitle('Per-Holiday Avg Daily Questions by Word Count Group', fontsize=14)
+    fig.tight_layout()
+    path = os.path.join(STEP_OUT, 'a6_per_holiday_length.png')
+    fig.savefig(path)
+    plt.close(fig)
+    log(f"Saved: {path}")
+
+    # ── CSV ──
+    csv_path = os.path.join(STEP_OUT, 'a6_per_holiday_length.csv')
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['holiday_name', 'num_dates',
+                     'b_1_10', 'b_11_30', 'b_31_100', 'b_100+',
+                     'nh_1_10', 'nh_11_30', 'nh_31_100', 'nh_100+',
+                     'wd_1_10', 'wd_11_30', 'wd_31_100', 'wd_100+',
+                     'we_1_10', 'we_11_30', 'we_31_100', 'we_100+'])
+        for name, dist, holiday in zip(names, h_dists, holiday_agg):
+            w.writerow([name, holiday['num_dates'],
+                        f'{dist[0]:.4f}', f'{dist[1]:.4f}', f'{dist[2]:.4f}', f'{dist[3]:.4f}',
+                        f'{nh_dist[0]:.4f}', f'{nh_dist[1]:.4f}', f'{nh_dist[2]:.4f}', f'{nh_dist[3]:.4f}',
+                        f'{wd_dist[0]:.4f}', f'{wd_dist[1]:.4f}', f'{wd_dist[2]:.4f}', f'{wd_dist[3]:.4f}',
+                        f'{we_dist[0]:.4f}', f'{we_dist[1]:.4f}', f'{we_dist[2]:.4f}', f'{we_dist[3]:.4f}'])
     log(f"Saved: {csv_path}")
 
 
@@ -759,16 +1058,17 @@ def dim_b4_per_holiday_hourly_vs_workday_weekend(seekers: list[dict]):
 #  Main（主入口）
 # ═══════════════════════════════════════════════════════════════════════
 
-def main():
+def main(data: dict = None):
     """Main entry point for Step 1: load data, run all analysis dimensions.
        步骤1主入口：加载数据，运行所有分析维度。"""
     log("=" * 60)
     log("Step 1: Question Frequency & Hourly Access Analysis")
     log("=" * 60)
 
-    # Load data（加载数据）
-    from movie.data_loader import load_all                    # 导入数据加载函数
-    data = load_all()                                          # 加载所有数据
+    if data is None:
+        # Load data（加载数据）
+        from movie.data_loader import load_all                    # 导入数据加载函数
+        data = load_all()                                          # 加载所有数据
     seekers = data['seekers']                                  # 提取提问者数据
 
     # ── Section A: Weekly period question frequency ──
@@ -785,6 +1085,17 @@ def main():
     dim_a3_per_holiday_vs_nonholiday(seekers)                  # A3: 柱状图-各节假日vs非节假日
     log("")
     dim_a4_per_holiday_vs_workday_weekend(seekers)             # A4: 柱状图-各节假日vs工作日vs周末
+
+    # ── Section A5-A6: Word length analysis ──
+    # 周周期：提问单词数分组分析
+    log("")
+    log("-" * 40)
+    log("Section A5-A6: Weekly Period - Word Length Distribution")
+    log("-" * 40)
+
+    dim_a5_holiday_length(seekers)                              # A5: 柱状图-单词数分组
+    log("")
+    dim_a6_per_holiday_length(seekers)                          # A6: 柱状图-各节假日单词数分组
 
     # ── Section B: Hourly access frequency ──
     # 日周期：按小时统计的访问频率

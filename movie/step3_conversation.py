@@ -1687,15 +1687,17 @@ def dim_g4_per_holiday_vs_workday_weekend_day_sessions(rows: list[dict]):
 #  Main（主入口）
 # ═══════════════════════════════════════════════════════════════════════
 
-def main():
+def main(data: dict = None):
     """Main entry point for Step 3: load data, run all conversation analyses.
        步骤3主入口：加载数据，运行所有会话分析维度。"""
     log("=" * 60)
     log("Step 3: Conversation Turn & Time Analysis")
     log("=" * 60)
 
-    from movie.data_loader import load_all
-    data = load_all()
+    if data is None:
+        # Load data（加载数据）
+        from movie.data_loader import load_all
+        data = load_all()
     rows = data['rows']                  # 需要所有行（含系统回复）进行会话分析
 
     # Section e: Session turn counts（会话轮次分析 - 单日多会话平均次数对比）

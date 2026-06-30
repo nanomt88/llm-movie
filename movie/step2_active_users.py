@@ -592,16 +592,17 @@ def dim_d4_per_holiday_hourly_active_vs_workday_weekend(seekers: list[dict]):
 #  Main（主入口）
 # ═══════════════════════════════════════════════════════════════════════
 
-def main():
+def main(data: dict = None ):
     """Main entry point for Step 2: load data, run all active user analyses.
        步骤2主入口：加载数据，运行所有活跃用户分析维度。"""
     log("=" * 60)
     log("Step 2: Active Users Analysis")
     log("=" * 60)
 
-    # Load data（加载数据）
-    from movie.data_loader import load_all
-    data = load_all()
+    if data is None:
+        # Load data（加载数据）
+        from movie.data_loader import load_all
+        data = load_all()
     seekers = data['seekers']
 
     # Section A: Weekly period（周周期分析）

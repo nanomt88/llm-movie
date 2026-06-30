@@ -103,6 +103,13 @@ def dim_y1_yearly_monthly_questions(seekers: list[dict]):
 
     years = sorted(yearly_data.keys())
 
+    # Collect holiday dates + name mapping from seeker data
+    holiday_dates_all = set(r['date'] for r in seekers if r['period'] == 'holiday')
+    date_holiday_names: dict[str, set[str]] = defaultdict(set)
+    for r in seekers:
+        if r['period'] == 'holiday':
+            date_holiday_names[r['date']].add(r['holiday_name'])
+
     # Log summary per year
     for y in years:
         all_counts = list(yearly_data[y].values())
@@ -136,6 +143,28 @@ def dim_y1_yearly_monthly_questions(seekers: list[dict]):
         color = YEAR_COLORS.get(y, '#333333')
         ax.plot(doy_list, counts, '-', color=color, linewidth=0.8,
                 label=str(y), alpha=0.85)
+
+        # Mark holiday dates with year-colored dots + holiday name labels
+        holiday_points = [(doy_list[i], counts[i]) for i, d in enumerate(date_strs)
+                          if d in holiday_dates_all]
+        if holiday_points:
+            hx, hy = zip(*holiday_points)
+            # Year-colored marker dot (same color as the year's line)
+            ax.scatter(hx, hy, color=color, s=50, zorder=5,
+                       edgecolors='white', linewidth=0.8, alpha=0.9)
+            # Holiday name labels above each point with white bbox (semi-transparent)
+            for i, d in enumerate(date_strs):
+                if d not in holiday_dates_all:
+                    continue
+                px, py = doy_list[i], counts[i]
+                names = date_holiday_names.get(d, set())
+                label = '/'.join(sorted(names))
+                ax.annotate(label, (px, py), textcoords="offset points",
+                            xytext=(0, 9), fontsize=5, ha='center',
+                            color=color, fontweight='bold',
+                            bbox=dict(boxstyle='round,pad=0.15',
+                                      facecolor='white', edgecolor='none',
+                                      alpha=0.65))
 
     # X-axis: month-start ticks (aligned to day-of-year space)
     # x 轴：仅显示每月 1 号
@@ -173,14 +202,15 @@ def dim_y1_yearly_monthly_questions(seekers: list[dict]):
 #  Main  主函数入口
 # ═══════════════════════════════════════════════════════════════════════
 
-def main():
+def main(data: dict = None):
     """Main entry point for Step 6: load data, run yearly daily analysis.
        步骤6主入口：加载数据，运行年度逐日分析。"""
     log("=" * 60)
     log("Step 6: Yearly Daily Question Count Analysis")
     log("=" * 60)
 
-    data = load_all()                              # 加载所有数据
+    if data is None:
+        data = load_all()  # 加载所有数据
     seekers = data['seekers']                      # 获取用户提问记录列表
 
     dim_y1_yearly_monthly_questions(seekers)       # Y1：年度逐日提问量

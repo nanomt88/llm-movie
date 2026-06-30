@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Master pipeline: runs Step 1 → Step 5 sequentially.
-主流水线：按顺序依次运行步骤 1 到步骤 5。
+Master pipeline: runs Step 1 → Step 10 sequentially.
+ 主流水线：按顺序依次运行步骤 1 到步骤 10。
 
 Usage（使用方法）:
     python pipeline.py               # 运行所有步骤
@@ -25,15 +25,20 @@ STEPS = {
     3: "Conversation Analysis",            # 步骤3：会话分析
     4: "Age Distribution Analysis",        # 步骤4：年龄分布分析
     5: "Movie Genre Analysis",             # 步骤5：电影类型分析
-    6: "Movie Daily Analysis",             # 步骤5：电影每日数据
+    6: "Movie Daily Analysis",             # 步骤6：电影每日数据
+    7: "Word Cloud & High-Frequency Words",# 步骤7：高频词与词云
+    8: "LDA Topic Model & Holiday Preference",  # 步骤8：LDA主题模型与节假日偏好
+    9: "Co-occurrence Network & Sentiment",    # 步骤9：共现网络与情感分析
+    10: "Aspect-Based Sentiment Analysis",     # 步骤10：ABSA与节假日差异化
 }
 
 
-def run_step(step_num: int) -> float:
+def run_step(step_num: int, data: dict = None) -> float:
     """Run a single step by number, return elapsed seconds.
        按编号运行单个步骤，返回耗时（秒）。
     Args:
         step_num: 步骤编号（1-5）
+        data: 全局数据，只跑一次
     Returns:
         该步骤执行所花费的秒数
     """
@@ -57,11 +62,19 @@ def run_step(step_num: int) -> float:
             from movie.step5_genre import main as m
         elif step_num == 6:
             from movie.step6_yearly_monthly import main as m
+        elif step_num == 7:
+            from movie.step7_wordcloud import main as m
+        elif step_num == 8:
+            from movie.step8_lda import main as m
+        elif step_num == 9:
+            from movie.step9_conet import main as m
+        elif step_num == 10:
+            from movie.step10_absa import main as m
         else:
             log(f"  Unknown step {step_num}")  # 未知步骤
             return 0.0
 
-        m()  # 执行该步骤的 main 函数
+        m(data)  # 执行该步骤的 main 函数
     except Exception as e:
         log(f"  ERROR in Step {step_num}: {e}")   # 打印错误信息
         traceback.print_exc()                      # 打印完整异常堆栈
@@ -115,9 +128,14 @@ def main():
     timings = {}           # 步骤编号 -> 耗时的字典
     total_t0 = time.time() # 记录总开始时间
 
+    log("loading all data start...")  # 流水线执行摘要
+    from movie.data_loader import load_all  # 延迟导入数据加载函数
+    data = load_all()  # 加载所有数据
+    log("loading all data end...")  # 流水线执行摘要
+
     # 依次运行每个选中的步骤
     for step in step_order:
-        elapsed = run_step(step)   # 运行步骤并获取耗时
+        elapsed = run_step(step, data)   # 运行步骤并获取耗时
         timings[step] = elapsed    # 记录该步骤耗时
         log("")
 
