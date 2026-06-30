@@ -457,6 +457,7 @@ def load_all(max_rows: int = None) -> dict:
     # 3. Full year conversation data（加载全年会话数据并标记时段）
     rows = load_conversations(FULL_YEAR_CSV, max_rows=max_rows)
     rows = tag_period(rows, holiday_map, adjustments)
+    rows = [r for r in rows if not r['date'].startswith('2018')]  # 过滤 2018 年数据，只保留 2019-2022
     seekers = [r for r in rows if r['is_seeker']]            # 筛选出用户提问行
 
     # 4. Movie info（加载电影信息）
