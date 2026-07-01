@@ -39,7 +39,7 @@ AGE_SEGMENTS = ['<18', '18-25', '26-35', '36-50', '50+', 'unknown']
 
 # ── Output directories（输出子目录）──────────────────────────────────────────────
 STEP_DIRS = {}                        # 步骤编号 -> 输出目录路径 的字典
-for step in range(1, 11):             # 遍历步骤 1 到 10
+for step in range(1, 12):             # 遍历步骤 1 到 11
     d = os.path.join(OUTPUT_DIR, f'step{step}')   # 每个步骤的输出子目录
     os.makedirs(d, exist_ok=True)     # 自动创建目录
     STEP_DIRS[step] = d               # 存入字典

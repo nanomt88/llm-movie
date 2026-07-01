@@ -14,30 +14,31 @@ Dependencies: transformers, torch (falls back to VADER if unavailable)
 Output: output/movie/step10/*.png + CSV
 """
 
-import os
-import csv
-import re
-import json
+import os           # 文件路径操作
+import csv          # CSV 读写
+import re           # 正则表达式（断句）
+import json         # JSON 处理
 import warnings
-from collections import defaultdict, Counter
+from collections import defaultdict, Counter   # 默认字典与计数器
 
-import numpy as np
+import numpy as np  # 数值计算
 
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg')       # 非交互式后端（服务器环境）
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
 from movie.utils.genre_map import to_en, get_all_english_genres
 
+# ── 初始化 ──────────────────────────────────────────────────────────
 setup_matplotlib()
-STEP_OUT = STEP_DIRS[10]
+STEP_OUT = STEP_DIRS[10]                # 输出目录：output/movie/step10/
 os.makedirs(STEP_OUT, exist_ok=True)
 
-# ── Aspect definitions ────────────────────────────────────────────────
-# Each aspect has keywords/phrases that indicate the aspect is being discussed
+# ── 方面定义 ─────────────────────────────────────────────────────────
 # 每个方面定义了一组关键词/短语，用于识别文本中涉及的方面
+# ASPECTS 字典结构：方面名 → {keywords: 关键词列表, label_cn: 中文标签, label_en: 英文标签}
 
 ASPECTS = {
     'genre': {
@@ -48,8 +49,8 @@ ASPECTS = {
             'romantic', 'scary', 'funny', 'dark', 'gritty', 'lighthearted',
             'type of movie', 'kind of movie', 'genres',
         ],
-        'label_cn': '类型',
-        'label_en': 'Genre/Style',
+        'label_cn': '类型',           # 中文标签
+        'label_en': 'Genre/Style',    # 英文标签
     },
     'plot': {
         'keywords': [
@@ -147,28 +148,31 @@ ASPECTS = {
     },
 }
 
+# 提取方面名列表和英文标签列表，方便后续使用
 ASPECT_NAMES = list(ASPECTS.keys())
 ASPECT_EN_LABELS = [ASPECTS[a]['label_en'] for a in ASPECT_NAMES]
 
-# ── Sentiment analyzer ────────────────────────────────────────────────
+
+# ── 情感分析器 ──────────────────────────────────────────────────────
 
 class SentimentAnalyzer:
     """Sentiment analysis using transformer model with fallback to VADER.
-       使用 transformer 模型进行情感分析，不可用时回退到 VADER。"""
+       使用 transformer 模型进行情感分析，不可用时回退到 VADER 或基于规则的简单方法。"""
 
     def __init__(self):
-        self.model = None
-        self.tokenizer = None
-        self.use_vader = False
+        self.model = None               # transformer 模型
+        self.tokenizer = None           # tokenizer（保留备用）
+        self.use_vader = False          # 是否使用 VADER
+        self.vader = None               # VADER 分析器实例
         self._initialize()
 
     def _initialize(self):
         """Try to load transformer model, fall back to VADER.
-           尝试加载 transformer 模型，回退到 VADER。"""
-        # Try transformers (ML-based)
+           尝试加载 transformer 模型，按优先顺序：distilbert → VADER → 基于规则。"""
+        # 选项 1：使用 transformers 库加载预训练情感模型
         try:
             from transformers import pipeline
-            # Use a small, fast model for sentiment
+            # 使用小型快速模型 distilbert 进行情感分析
             self.model = pipeline(
                 'sentiment-analysis',
                 model='distilbert-base-uncased-finetuned-sst-2-english',
@@ -180,7 +184,7 @@ class SentimentAnalyzer:
         except Exception as e:
             log(f"  Sentiment: transformers unavailable ({e}), trying VADER", "ABSA")
 
-        # Fallback to VADER
+        # 选项 2：回退到 VADER 词典方法
         try:
             from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
             self.vader = SentimentIntensityAnalyzer()
@@ -196,22 +200,24 @@ class SentimentAnalyzer:
            预测文本的情感。
         Returns:
             (label, score): ('POSITIVE'|'NEGATIVE'|'NEUTRAL', confidence)
-        """
+            标签为 POSITIVE/NEGATIVE/NEUTRAL，score 为置信度"""
         if not text or len(text.strip()) < 3:
-            return ('NEUTRAL', 0.0)
+            return ('NEUTRAL', 0.0)          # 空白或过短文本返回中性
 
+        # 方式 1：transformer 模型预测
         if self.model is not None:
             try:
-                result = self.model(text[:512])[0]
+                result = self.model(text[:512])[0]     # 截断到 512 字符
                 label = result['label']
                 score = result['score']
                 return (label, score)
             except Exception:
                 return ('NEUTRAL', 0.0)
 
+        # 方式 2：VADER 情感词典
         if self.use_vader:
             scores = self.vader.polarity_scores(text)
-            compound = scores['compound']
+            compound = scores['compound']               # 综合得分 [-1, 1]
             if compound >= 0.05:
                 return ('POSITIVE', compound)
             elif compound <= -0.05:
@@ -219,7 +225,7 @@ class SentimentAnalyzer:
             else:
                 return ('NEUTRAL', 0.0)
 
-        # Simple rule-based fallback
+        # 方式 3：简单的基于关键词的规则方法（最终 fallback）
         pos_words = {'good', 'great', 'amazing', 'excellent', 'wonderful',
                      'fantastic', 'love', 'best', 'beautiful', 'awesome',
                      'enjoy', 'enjoyed', 'fun', 'funny', 'interesting',
@@ -228,8 +234,8 @@ class SentimentAnalyzer:
                      'hate', 'boring', 'dull', 'poor', 'disappointing',
                      'waste', 'ugly', 'stupid', 'ridiculous', 'annoying'}
         words = set(text.lower().split())
-        pos_count = len(words & pos_words)
-        neg_count = len(words & neg_words)
+        pos_count = len(words & pos_words)       # 正面词匹配数
+        neg_count = len(words & neg_words)       # 负面词匹配数
         if pos_count > neg_count:
             return ('POSITIVE', min(pos_count / max(len(words), 1) * 5, 1.0))
         elif neg_count > pos_count:
@@ -238,12 +244,14 @@ class SentimentAnalyzer:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Aspect detection & sentiment extraction
+#  方面检测与情感提取
 # ═══════════════════════════════════════════════════════════════════════
 
 def detect_aspects(text: str) -> dict[str, str]:
     """Detect which aspects are mentioned in text and extract the relevant snippet.
-       检测文本中涉及的方面，并提取相关片段。"""
+       检测文本中涉及的方面，并提取相关片段。
+    Returns:
+        dict[aspect_name] -> 包含该关键词的句子片段"""
     if not text:
         return {}
     text_lower = text.lower()
@@ -251,7 +259,7 @@ def detect_aspects(text: str) -> dict[str, str]:
     for aspect_name, aspect_config in ASPECTS.items():
         for kw in aspect_config['keywords']:
             if kw in text_lower:
-                # Extract the sentence containing the keyword
+                # 提取包含该关键词的句子
                 sentences = re.split(r'[.!?]+', text)
                 for sent in sentences:
                     if kw in sent.lower():
@@ -271,19 +279,19 @@ def extract_aspect_sentiments(
        从用户提问记录中提取方面级情感。
     Returns:
         List of dicts with: date, period, holiday_name, aspect, sentiment, score, snippet
-    """
+        每条记录包含：日期、时段、节假日名、方面、情感标签、分数、原文片段"""
     results = []
     stats = Counter()
     for r in seekers:
         text = r.get('proc_text', '') or r.get('raw_text', '')
         if not text:
             continue
-        aspects = detect_aspects(text)
+        aspects = detect_aspects(text)            # 检测文本涉及的方面
         if not aspects:
             continue
 
         for aspect, snippet in aspects.items():
-            sentiment, score = analyzer.predict(snippet)
+            sentiment, score = analyzer.predict(snippet)    # 对该片段进行情感分析
             results.append({
                 'date': r.get('date', ''),
                 'period': r.get('period', ''),
@@ -294,7 +302,7 @@ def extract_aspect_sentiments(
                 'aspect_label': ASPECTS[aspect]['label_en'],
                 'sentiment': sentiment,
                 'score': score,
-                'snippet': snippet[:200],
+                'snippet': snippet[:200],                   # 截取前 200 字符
             })
             stats[aspect] += 1
 
@@ -304,12 +312,12 @@ def extract_aspect_sentiments(
 
 def _sentiment_to_numeric(sentiment: str) -> int:
     """Convert sentiment label to numeric value.
-       将情感标签转换为数值。"""
+       将情感标签转换为数值：POSITIVE=1, NEUTRAL=0, NEGATIVE=-1"""
     return {'POSITIVE': 1, 'NEUTRAL': 0, 'NEGATIVE': -1}.get(sentiment, 0)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Visualization
+#  可视化
 # ═══════════════════════════════════════════════════════════════════════
 
 def _plot_aspect_sentiment_bars(
@@ -317,7 +325,9 @@ def _plot_aspect_sentiment_bars(
     title: str, filename: str,
 ):
     """Grouped bar chart of sentiment scores per aspect.
-       各方面情感得分的分组柱状图。"""
+       各方面情感得分的分组柱状图（可比较不同分组如节假日 vs 非节假日）。
+    aspect_data: dict[aspect] -> dict[group] -> {'mean', 'std', ...}"""
+    # 按情感均值排序方面
     aspects = sorted(aspect_data.keys(), key=lambda a: sum(
         aspect_data[a].get(g, {}).get('mean', 0) for g in aspect_data[a]
     ), reverse=True)
@@ -349,9 +359,9 @@ def _plot_aspect_sentiment_bars(
     ax.set_xticks(x)
     ax.set_xticklabels([ASPECTS[a]['label_en'] for a in aspects],
                        rotation=30, ha='right', fontsize=9)
-    ax.set_ylabel('Mean Sentiment (-1 to +1)')
+    ax.set_ylabel('Mean Sentiment (-1 to +1)')          # 平均情感 (-1 到 +1)
     ax.set_title(title, fontsize=12)
-    ax.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+    ax.axhline(y=0, color='gray', linestyle='--', alpha=0.5)   # 中性参考线
     ax.legend(fontsize=9)
     ax.grid(axis='y', alpha=0.3)
     ax.set_ylim(-1.1, 1.1)
@@ -368,7 +378,7 @@ def _plot_aspect_heatmap(
     cmap: str = 'RdBu_r',
 ):
     """Heatmap of aspect values (rows=holidays, cols=aspects).
-       方面值热力图（行=节假日，列=方面）。"""
+       方面值热力图（行=节假日，列=方面），展示各节假日对各方面的情感倾向。"""
     names = sorted(aspect_matrix.keys())
     aspects = ASPECT_NAMES
     if not names:
@@ -428,15 +438,16 @@ def _aggregate_aspect_sentiment(
        聚合方面情感记录为统计数据。
     Args:
         aspect_records: 方面情感记录列表
-        filter_fn: 可选过滤函数
+        filter_fn: 可选过滤函数，用于筛选子集（如仅节假日）
         group_by_period: 是否按 period 分组，否则合并为 'overall' 组
     Returns:
         dict[aspect] -> dict[group] -> {'mean', 'std', 'count', 'pos_ratio'}
-    """
+        各方面在各分组下的均值、标准差、样本数、正面比例"""
     filtered = aspect_records if filter_fn is None else [r for r in aspect_records if filter_fn(r)]
     if not filtered:
         return {}
 
+    # 按方面和分组收集数值化情感
     grouped = defaultdict(lambda: defaultdict(list))
     for rec in filtered:
         aspect = rec['aspect']
@@ -446,27 +457,28 @@ def _aggregate_aspect_sentiment(
             group_key = 'overall'
         grouped[aspect][group_key].append(_sentiment_to_numeric(rec['sentiment']))
 
+    # 计算统计量
     result = {}
     for aspect, group_data in grouped.items():
         result[aspect] = {}
         for group, scores in group_data.items():
             arr = np.array(scores)
             result[aspect][group] = {
-                'mean': float(arr.mean()),
-                'std': float(arr.std()) if len(arr) > 1 else 0.0,
-                'count': len(arr),
-                'pos_ratio': float((arr > 0).sum() / max(len(arr), 1)),
+                'mean': float(arr.mean()),                      # 情感均值
+                'std': float(arr.std()) if len(arr) > 1 else 0.0,  # 标准差
+                'count': len(arr),                               # 样本数
+                'pos_ratio': float((arr > 0).sum() / max(len(arr), 1)),  # 正面占比
             }
     return result
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Analysis dimensions
+#  分析维度
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_a1_aspect_distribution(aspect_records: list[dict]):
     """Overall aspect mention distribution.
-       全局方面提及分布统计。"""
+       全局方面提及分布统计：各方面被提及的次数与占比。"""
     log("=" * 50)
     log("A1: Aspect Mention Distribution")
 
@@ -477,7 +489,7 @@ def dim_a1_aspect_distribution(aspect_records: list[dict]):
         pct = cnt / total * 100
         log(f"    {label}: {cnt} ({pct:.1f}%)")
 
-    # Pie chart
+    # 饼图展示
     labels = [l for l, _ in counter.most_common()]
     values = [c for _, c in counter.most_common()]
     colors = plt.cm.Set3(np.linspace(0, 1, len(labels)))
@@ -499,11 +511,10 @@ def dim_a1_aspect_distribution(aspect_records: list[dict]):
 
 def dim_a2_overall_aspect_sentiment(aspect_records: list[dict]):
     """Overall sentiment per aspect.
-       各方面总体情感。"""
+        各方面总体情感：不区分时段，计算每个方面的平均情感得分。"""
     log("=" * 50)
     log("A2: Overall Aspect Sentiment")
 
-    # Overall (no period grouping)
     agg = _aggregate_aspect_sentiment(aspect_records, group_by_period=False)
     if not agg:
         log("  No aspect data")
@@ -528,6 +539,7 @@ def dim_a3_holiday_vs_nonholiday_aspect(aspect_records: list[dict]):
     log("=" * 50)
     log("A3: Holiday vs Non-Holiday Aspect Sentiment")
 
+    # 分别聚合节假日和非节假日数据
     h_agg = _aggregate_aspect_sentiment(
         aspect_records, lambda r: r['period'] == 'holiday'
     )
@@ -535,7 +547,7 @@ def dim_a3_holiday_vs_nonholiday_aspect(aspect_records: list[dict]):
         aspect_records, lambda r: r['period'] != 'holiday'
     )
 
-    # Merge into single dict for plotting
+    # 合并到一个字典用于绘图
     merged = {}
     for aspect in set(list(h_agg.keys()) + list(nh_agg.keys())):
         merged[aspect] = {}
@@ -552,7 +564,7 @@ def dim_a3_holiday_vs_nonholiday_aspect(aspect_records: list[dict]):
             'a3_holiday_vs_nonholiday_aspect.png',
         )
 
-    # CSV
+    # 保存 CSV
     csv_path = os.path.join(STEP_OUT, 'a3_holiday_vs_nonholiday_aspect.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
@@ -593,6 +605,7 @@ def dim_a4_holiday_workday_weekend_aspect(aspect_records: list[dict]):
             'a4_holiday_workday_weekend_aspect.png',
         )
 
+    # 保存 CSV
     csv_path = os.path.join(STEP_OUT, 'a4_holiday_workday_weekend_aspect.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
@@ -610,20 +623,20 @@ def dim_a4_holiday_workday_weekend_aspect(aspect_records: list[dict]):
 
 def dim_a5_per_holiday_aspect_heatmap(aspect_records: list[dict]):
     """Per-holiday aspect sentiment heatmap.
-       各节假日方面情感热力图。"""
+       各节假日方面情感热力图：展示每个节假日对各方面的平均情感得分。"""
     log("=" * 50)
     log("A5: Per-Holiday Aspect Sentiment Heatmap")
 
-    # Group by holiday name
+    # 按节假日名和方面分组收集情感得分
     holiday_aspects = defaultdict(lambda: defaultdict(list))
     for rec in aspect_records:
         if rec['is_holiday'] and rec['holiday_name']:
-            name = rec['holiday_name'][:8]
+            name = rec['holiday_name'][:8]          # 节假日名截取前 8 字符
             holiday_aspects[name][rec['aspect']].append(
                 _sentiment_to_numeric(rec['sentiment'])
             )
 
-    # Filter: need MIN_DATA_ROWS data points per holiday
+    # 过滤数据量不足的节假日
     holiday_aspects = {
         k: v for k, v in holiday_aspects.items()
         if sum(len(scores) for scores in v.values()) >= MIN_DATA_ROWS
@@ -633,18 +646,18 @@ def dim_a5_per_holiday_aspect_heatmap(aspect_records: list[dict]):
         log("  No holiday groups with sufficient data")
         return
 
-    # Build matrix
+    # 构建矩阵：节假日 × 方面
     holiday_names = sorted(holiday_aspects.keys())
     matrix = np.zeros((len(holiday_names), len(ASPECT_NAMES)))
     for i, name in enumerate(holiday_names):
         for j, aspect in enumerate(ASPECT_NAMES):
             scores = holiday_aspects[name].get(aspect, [])
             if scores:
-                matrix[i, j] = np.mean(scores)
+                matrix[i, j] = np.mean(scores)       # 该方面平均情感
             else:
-                matrix[i, j] = np.nan
+                matrix[i, j] = np.nan                # 无数据则标记 NaN
 
-    # Heatmap
+    # 绘制热力图（NaN 区域显示为浅灰色）
     fig, ax = plt.subplots(figsize=(max(12, len(ASPECT_NAMES) * 0.8),
                                      max(5, len(holiday_names) * 0.5 + 1)))
     mask = np.isnan(matrix)
@@ -668,7 +681,7 @@ def dim_a5_per_holiday_aspect_heatmap(aspect_records: list[dict]):
     plt.close(fig)
     log(f"Saved: {path}")
 
-    # CSV
+    # 保存 CSV
     csv_path = os.path.join(STEP_OUT, 'a5_per_holiday_aspect_sentiment.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
@@ -692,7 +705,7 @@ def dim_a5_per_holiday_aspect_heatmap(aspect_records: list[dict]):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Main
+#  主函数
 # ═══════════════════════════════════════════════════════════════════════
 
 def main(data: dict = None):
@@ -700,18 +713,19 @@ def main(data: dict = None):
     log("Step 10: Aspect-Based Sentiment Analysis & Holiday Differentiation")
     log("=" * 60)
 
+    # 加载数据
     if data is None:
         from movie.data_loader import load_all
         data = load_all()
     seekers = data['seekers']
     log(f"Loaded {len(seekers)} seeker records")
 
-    # Initialize sentiment analyzer (ML-based)
+    # 初始化情感分析器（自动选择：distilbert > VADER > rule-based）
     log("Initializing sentiment analyzer...")
     analyzer = SentimentAnalyzer()
     log("")
 
-    # Extract aspect sentiments
+    # 提取方面级情感
     log("Extracting aspect sentiments from seekers...")
     aspect_records = extract_aspect_sentiments(seekers, analyzer)
     log(f"  Total aspect-sentiment records: {len(aspect_records)}")
@@ -721,26 +735,26 @@ def main(data: dict = None):
         log("  No aspect data found. Skipping all analysis.")
         return
 
-    # Save raw data
+    # 保存原始数据
     _save_aspect_csv(aspect_records, 'a0_aspect_sentiments_raw.csv')
 
-    # A1: Aspect distribution
+    # A1: 方面提及分布
     dim_a1_aspect_distribution(aspect_records)
     log("")
 
-    # A2: Overall aspect sentiment
+    # A2: 各方面总体情感
     dim_a2_overall_aspect_sentiment(aspect_records)
     log("")
 
-    # A3: Holiday vs non-holiday
+    # A3: 节假日 vs 非节假日对比
     dim_a3_holiday_vs_nonholiday_aspect(aspect_records)
     log("")
 
-    # A4: Holiday vs workday vs weekend
+    # A4: 节假日 vs 工作日 vs 周末对比
     dim_a4_holiday_workday_weekend_aspect(aspect_records)
     log("")
 
-    # A5: Per-holiday heatmap
+    # A5: 各节假日热力图
     dim_a5_per_holiday_aspect_heatmap(aspect_records)
 
     log("")

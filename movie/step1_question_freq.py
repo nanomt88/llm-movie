@@ -25,35 +25,35 @@ Output: output/movie/step1/*.png + CSV (A5-A6 added for word-length analysis)
 输出目录：output/movie/step1/，包含 PNG 图表和 CSV 数据文件（A5-A6 新增单词数分析）
 """
 
-import os                          # 操作系统接口，用于路径拼接和目录创建
-import re                          # 正则表达式，用于文本清理
-import csv                         # CSV 文件读写，用于保存数值结果
+import os  # 操作系统接口，用于路径拼接和目录创建
+import re  # 正则表达式，用于文本清理
+import csv  # CSV 文件读写，用于保存数值结果
 from collections import defaultdict, Counter  # 默认字典和计数器
-from datetime import datetime, timezone       # 日期时间与时区处理
+from datetime import datetime, timezone  # 日期时间与时区处理
 
-import numpy as np                 # 数值计算库，用于均值等计算
-import matplotlib                  # 绘图库
-matplotlib.use('Agg')              # 使用 Agg 后端（无 GUI），适用于服务器环境
-import matplotlib.pyplot as plt    # pyplot 模块，用于生成图表
-import matplotlib.ticker as ticker # 坐标轴刻度格式化
+import numpy as np  # 数值计算库，用于均值等计算
+import matplotlib  # 绘图库
+
+matplotlib.use('Agg')  # 使用 Agg 后端（无 GUI），适用于服务器环境
+import matplotlib.pyplot as plt  # pyplot 模块，用于生成图表
+import matplotlib.ticker as ticker  # 坐标轴刻度格式化
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log  # 共享配置
-from movie.data_loader import (    # 数据加载模块
+from movie.data_loader import (  # 数据加载模块
     load_conversations, load_holiday_definitions, load_holiday_workday_adjustments,
-    tag_period,                    # 时段标记函数
+    tag_period,  # 时段标记函数
 )
 
-setup_matplotlib()                 # 初始化 matplotlib（Agg 后端 + 中文字体）
-STEP_OUT = STEP_DIRS[1]            # 步骤1的输出目录：output/movie/step1/
+setup_matplotlib()  # 初始化 matplotlib（Agg 后端 + 中文字体）
+STEP_OUT = STEP_DIRS[1]  # 步骤1的输出目录：output/movie/step1/
 os.makedirs(STEP_OUT, exist_ok=True)  # 确保输出目录存在
 
-
 # ── Chart color scheme（图表配色方案）────────────────────────────────────────
-COLOR_HOLIDAY = '#ff6b6b'          # 节假日：红色
-COLOR_NONHOLIDAY = '#74b9ff'       # 非节假日：蓝色
-COLOR_WORKDAY = '#feca57'          # 工作日：黄色
-COLOR_WEEKEND = '#48dbfb'          # 周末：青色
-HOLIDAY_CMAP = 'Set2'              # 节假日组柱状图使用的色图
+COLOR_HOLIDAY = '#ff6b6b'  # 节假日：红色
+COLOR_NONHOLIDAY = '#74b9ff'  # 非节假日：蓝色
+COLOR_WORKDAY = '#feca57'  # 工作日：黄色
+COLOR_WEEKEND = '#48dbfb'  # 周末：青色
+HOLIDAY_CMAP = 'Set2'  # 节假日组柱状图使用的色图
 
 # ── Word length bucket definitions（单词数分组定义）─────────────────────
 WORD_LEN_BUCKETS = [(1, 10), (11, 30), (31, 100), (101, float('inf'))]
@@ -76,13 +76,13 @@ def _avg_daily_questions(seekers: list[dict], date_set: set) -> float:
     Returns:
         日均提问数（浮点数），无数据时返回 0.0
     """
-    daily_counts = Counter()                                 # 每日提问数计数器
-    for r in seekers:                                       # 遍历每个提问
-        if r['date'] in date_set:                            # 如果该提问在目标日期内
-            daily_counts[r['date']] += 1                     # 对应日期计数+1
-    if not daily_counts:                                     # 没有数据
+    daily_counts = Counter()  # 每日提问数计数器
+    for r in seekers:  # 遍历每个提问
+        if r['date'] in date_set:  # 如果该提问在目标日期内
+            daily_counts[r['date']] += 1  # 对应日期计数+1
+    if not daily_counts:  # 没有数据
         return 0.0
-    return np.mean(list(daily_counts.values()))              # 返回每日计数的平均值
+    return np.mean(list(daily_counts.values()))  # 返回每日计数的平均值
 
 
 def _grouped_daily_questions(seekers: list[dict]) -> dict:
@@ -100,20 +100,20 @@ def _grouped_daily_questions(seekers: list[dict]) -> dict:
     """
     # 初始化四个 defaultdict，键为日期，值为整数（默认0）
     groups = {
-        'holiday': defaultdict(int),        # 节假日每日提问数
-        'workday': defaultdict(int),        # 工作日每日提问数
-        'weekend': defaultdict(int),        # 周末每日提问数
-        'non_holiday': defaultdict(int),    # 非节假日每日提问数
+        'holiday': defaultdict(int),  # 节假日每日提问数
+        'workday': defaultdict(int),  # 工作日每日提问数
+        'weekend': defaultdict(int),  # 周末每日提问数
+        'non_holiday': defaultdict(int),  # 非节假日每日提问数
     }
-    for r in seekers:                      # 遍历每个提问
-        d = r['date']                      # 提问日期
-        if r['period'] == 'holiday':       # 节假日提问
+    for r in seekers:  # 遍历每个提问
+        d = r['date']  # 提问日期
+        if r['period'] == 'holiday':  # 节假日提问
             groups['holiday'][d] += 1
             groups['non_holiday'][d] += 0  # 确保 non_holiday 中不含此日期
-        elif r['period'] == 'workday':     # 工作日提问
+        elif r['period'] == 'workday':  # 工作日提问
             groups['workday'][d] += 1
             groups['non_holiday'][d] += 1
-        elif r['period'] == 'weekend':     # 周末提问
+        elif r['period'] == 'weekend':  # 周末提问
             groups['weekend'][d] += 1
             groups['non_holiday'][d] += 1
     return groups
@@ -182,10 +182,78 @@ def _word_len_distribution(seekers: list[dict], date_set: set) -> list[float]:
     return [t / num_days for t in totals]
 
 
+'''
 # ═══════════════════════════════════════════════════════════════════════
 #  A: 节假日 VS 非节假日 平均提问次数 (Pie)
 #  A: Holiday vs Non-Holiday Average Daily Questions
 # ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   双面板柱状图（1行2列）
+#   - 左图: 节假日(Holiday) vs 非节假日(Non-holiday) 日均提问数对比
+#   - 右图: 节假日(Holiday) vs 工作日(Workday) vs 周末(Weekend) 日均提问数对比
+# 
+# 【统计口径】
+#   指标说明:
+#     - "日均提问数" = 该组内各天的提问数列表取均值 (np.mean)
+#     - 注意: 是"每天提问数的均值", 不是"总提问数/总天数", 前者更能反映典型日水平
+#   分组方式:
+#     - 按 data_loader 中 tag_period() 打标的 r['period'] 字段分组
+#     - holiday: 法定节假日日期
+#     - workday: 非节假日的周一至周五
+#     - weekend: 非节假日的周六周日
+#     - non_holiday: workday + weekend 的并集
+# 
+# 【坐标轴】
+#   X轴: 分组类别（每根柱子对应一个分组）
+#   Y轴: 日均提问数（用 MaxNLocator(integer=True) 强制显示整数刻度）
+# 
+# 【输出文件】
+#   PNG: a1_holiday_vs_nonholiday_bar.png
+#   CSV: a1_holiday_vs_nonholiday.csv (含: 分组名, 日均提问数, 天数)
+# 
+# 【特殊说明】
+#   - 柱顶用 ax.text() 手动标注数值 (居中对齐, 离柱顶 0.3 单位)
+#   - 柱宽 0.5, 白色边框线宽 0.5, alpha=0.8
+#   - 配色方案: 假日红(#ff6b6b) / 非假日蓝(#74b9ff) / 工作日黄(#feca57) / 周末青(#48dbfb)
+# 
+# 【代码中处理逻辑】
+#   1. 数据分组阶段
+#      遍历 seekers 列表, 根据 r['period'] 取值将日期分入四个 set:
+#        holiday_dates     ← 收集 r['period'] == 'holiday' 的 r['date']
+#        non_holiday_dates ← 收集 r['period'] != 'holiday' 的 r['date']
+#        workday_dates     ← 收集 r['period'] == 'workday' 的 r['date']
+#        weekend_dates     ← 收集 r['period'] == 'weekend' 的 r['date']
+#      每个 set 中的日期天然去重（set 特性, 同一天多个提问只算一个日期）
+# 
+#   2. 日均值计算阶段 (核心函数 _avg_daily_questions)
+#       输入: seekers 提问行列表, date_set 目标日期集合
+#       过程:
+#        a) 初始化 Counter() → daily_counts
+#        b) 遍历整个 seekers:
+#           若 r['date'] in date_set → daily_counts[r['date']] += 1
+#        c) 若 daily_counts 为空 → 返回 0.0
+#        d) 否则 → np.mean(list(daily_counts.values())) 返回 float 均值
+#       示例: 某组日期集合有3天, 每天提问数分别为 [5, 3, 7]
+#             则日均值 = (5+3+7)/3 = 5.0, 而非 (5+3+7)/总天数N
+# 
+#   3. 图表渲染阶段
+#       左图 (ax1):
+#        - ax1.bar(['Holiday', 'Non-holiday'], [h_avg, nh_avg], color=[红, 蓝])
+#        - 遍历 bars, 在每根柱子 x+width/2 位置, y+0.3 位置标注数值
+#       右图 (ax2):
+#        - ax2.bar(['Holiday', 'Workday', 'Weekend'], [h_avg, wd_avg, we_avg], color=[红, 黄, 青])
+#        - 同样 ax.text() 标注
+#       两图共享:
+#        - set_ylabel('Avg Daily Questions')
+#        - grid(axis='y', alpha=0.3) 水平网格线
+#        - yaxis.set_major_locator(MaxNLocator(integer=True)) 整数刻度
+# 
+#   4. 输出保存阶段
+#        - fig.savefig(path) 输出 PNG
+#        - csv.writer 写入 CSV, 每行: [group, avg_daily_questions, num_days]
+# ═══════════════════════════════════════════════════════════════════════════
+'''
+
 
 def dim_a1_holiday_vs_nonholiday_pie(seekers: list[dict]):
     """
@@ -317,19 +385,19 @@ def _aggregate_holiday_names(seekers: list[dict]) -> list[dict]:
     """
     # Per holiday name stats（每个节假日名称的统计）
     holiday_stats = defaultdict(lambda: {
-        'name': '',                 # 节假日名称
-        'total_questions': 0,       # 总提问数
-        'dates': set(),             # 出现该节假日的日期集合
+        'name': '',  # 节假日名称
+        'total_questions': 0,  # 总提问数
+        'dates': set(),  # 出现该节假日的日期集合
         'daily_counts': defaultdict(int),  # 每天提问数
     })
 
-    for r in seekers:              # 遍历每个提问
-        if r['period'] == 'holiday':        # 仅处理节假日提问
-            name = r['holiday_name'][:6]    # 取前6个字符作为组名（如 "春节"）
+    for r in seekers:  # 遍历每个提问
+        if r['period'] == 'holiday':  # 仅处理节假日提问
+            name = r['holiday_name'][:6]  # 取前6个字符作为组名（如 "春节"）
             entry = holiday_stats[name]
             entry['name'] = name
-            entry['total_questions'] += 1   # 总提问数+1
-            entry['dates'].add(r['date'])   # 记录日期
+            entry['total_questions'] += 1  # 总提问数+1
+            entry['dates'].add(r['date'])  # 记录日期
             entry['daily_counts'][r['date']] += 1  # 每日计数+1
 
     # Compute avg daily questions per holiday name
@@ -338,8 +406,8 @@ def _aggregate_holiday_names(seekers: list[dict]) -> list[dict]:
         if len(data['dates']) < MIN_DATA_ROWS // 5:  # 如果数据天数太少则跳过
             continue
         daily_vals = list(data['daily_counts'].values())  # 所有每日计数
-        data['avg_daily'] = np.mean(daily_vals)           # 日均提问数
-        data['num_dates'] = len(data['dates'])            # 有效天数
+        data['avg_daily'] = np.mean(daily_vals)  # 日均提问数
+        data['num_dates'] = len(data['dates'])  # 有效天数
         result.append(data)
 
     result.sort(key=lambda x: x['total_questions'], reverse=True)  # 按总提问数降序
@@ -424,7 +492,7 @@ def dim_a3_per_holiday_vs_nonholiday(seekers: list[dict]):
     with open(csv_a3, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['holiday_name', 'avg_daily_questions', 'num_dates',
-                     'total_questions', 'non_holiday_baseline'])
+                    'total_questions', 'non_holiday_baseline'])
         for h in holiday_agg:
             w.writerow([h['name'], f'{h["avg_daily"]:.2f}', h['num_dates'],
                         h['total_questions'], f'{nh_avg:.2f}'])
@@ -435,7 +503,7 @@ def dim_a3_per_holiday_vs_nonholiday(seekers: list[dict]):
     with open(csv_a4, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['holiday_name', 'avg_daily_questions', 'num_dates',
-                     'total_questions', 'workday_baseline', 'weekend_baseline'])
+                    'total_questions', 'workday_baseline', 'weekend_baseline'])
         for h in holiday_agg:
             w.writerow([h['name'], f'{h["avg_daily"]:.2f}', h['num_dates'],
                         h['total_questions'], f'{wd_avg:.2f}', f'{we_avg:.2f}'])
@@ -471,7 +539,7 @@ def dim_a4_per_holiday_vs_workday_weekend(seekers: list[dict]):
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['holiday_name', 'avg_daily_questions', 'num_dates',
-                     'total_questions', 'workday_baseline', 'weekend_baseline'])
+                    'total_questions', 'workday_baseline', 'weekend_baseline'])
         for h in holiday_agg:
             w.writerow([h['name'], f'{h["avg_daily"]:.2f}', h['num_dates'],
                         h['total_questions'], f'{wd_avg:.2f}', f'{we_avg:.2f}'])
@@ -571,7 +639,7 @@ def dim_a5_holiday_length(seekers: list[dict]):
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['group', 'num_days', 'bucket_1_10', 'bucket_11_30',
-                     'bucket_31_100', 'bucket_100+'])
+                    'bucket_31_100', 'bucket_100+'])
         for label, nd, dist in [
             ('holiday', len(holiday_dates), h_dist),
             ('non_holiday', len(non_holiday_dates), nh_dist),
@@ -614,7 +682,7 @@ def dim_a6_per_holiday_length(seekers: list[dict]):
 
     # Per-holiday distributions
     names = []
-    h_dists = []   # list of [4-element dist] per holiday
+    h_dists = []  # list of [4-element dist] per holiday
     for h in holiday_agg:
         names.append(h['name'])
         h_dists.append(_word_len_distribution(seekers, h['dates']))
@@ -644,9 +712,9 @@ def dim_a6_per_holiday_length(seekers: list[dict]):
     from matplotlib.patches import Patch
     from matplotlib.lines import Line2D
     legend_elements = (
-        [Patch(facecolor=BUCKET_COLORS[i], alpha=0.85, label=WORD_LEN_LABELS[i])
-         for i in range(4)]
-        + [Line2D([0], [0], color='gray', linestyle='--', linewidth=1.5, label='Non-holiday baseline')]
+            [Patch(facecolor=BUCKET_COLORS[i], alpha=0.85, label=WORD_LEN_LABELS[i])
+             for i in range(4)]
+            + [Line2D([0], [0], color='gray', linestyle='--', linewidth=1.5, label='Non-holiday baseline')]
     )
     ax1.legend(handles=legend_elements, fontsize=8, ncol=3)
     ax1.set_xticks(x)
@@ -667,10 +735,10 @@ def dim_a6_per_holiday_length(seekers: list[dict]):
         ax2.axhline(y=we_dist[i], color=BUCKET_COLORS[i], linestyle='-.',
                     linewidth=1.5, alpha=0.6)
     legend_elements2 = (
-        [Patch(facecolor=BUCKET_COLORS[i], alpha=0.85, label=WORD_LEN_LABELS[i])
-         for i in range(4)]
-        + [Line2D([0], [0], color='gray', linestyle=':', linewidth=1.5, label='Workday baseline'),
-           Line2D([0], [0], color='gray', linestyle='-.', linewidth=1.5, label='Weekend baseline')]
+            [Patch(facecolor=BUCKET_COLORS[i], alpha=0.85, label=WORD_LEN_LABELS[i])
+             for i in range(4)]
+            + [Line2D([0], [0], color='gray', linestyle=':', linewidth=1.5, label='Workday baseline'),
+               Line2D([0], [0], color='gray', linestyle='-.', linewidth=1.5, label='Weekend baseline')]
     )
     ax2.legend(handles=legend_elements2, fontsize=8, ncol=3)
     ax2.set_xticks(x)
@@ -691,10 +759,10 @@ def dim_a6_per_holiday_length(seekers: list[dict]):
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['holiday_name', 'num_dates',
-                     'b_1_10', 'b_11_30', 'b_31_100', 'b_100+',
-                     'nh_1_10', 'nh_11_30', 'nh_31_100', 'nh_100+',
-                     'wd_1_10', 'wd_11_30', 'wd_31_100', 'wd_100+',
-                     'we_1_10', 'we_11_30', 'we_31_100', 'we_100+'])
+                    'b_1_10', 'b_11_30', 'b_31_100', 'b_100+',
+                    'nh_1_10', 'nh_11_30', 'nh_31_100', 'nh_100+',
+                    'wd_1_10', 'wd_11_30', 'wd_31_100', 'wd_100+',
+                    'we_1_10', 'we_11_30', 'we_31_100', 'we_100+'])
         for name, dist, holiday in zip(names, h_dists, holiday_agg):
             w.writerow([name, holiday['num_dates'],
                         f'{dist[0]:.4f}', f'{dist[1]:.4f}', f'{dist[2]:.4f}', f'{dist[3]:.4f}',
@@ -719,14 +787,14 @@ def _hourly_avg(seekers: list[dict], date_set: set) -> list[float]:
     Returns:
         长度为24的浮点数列表，表示每个小时的平均提问数
     """
-    if not date_set:                        # 空日期集合返回全0
+    if not date_set:  # 空日期集合返回全0
         return [0.0] * 24
 
     # For each date, count questions per hour
     date_hour_counts = defaultdict(lambda: defaultdict(int))  # 日期 -> 小时 -> 计数
     for r in seekers:
         if r['date'] in date_set:
-            date_hour_counts[r['date']][r['hour']] += 1      # 该日期该小时计数+1
+            date_hour_counts[r['date']][r['hour']] += 1  # 该日期该小时计数+1
 
     # Average across all dates in set（跨所有日期求平均）
     hourly_totals = [0.0] * 24
@@ -734,18 +802,18 @@ def _hourly_avg(seekers: list[dict], date_set: set) -> list[float]:
     if num_dates == 0:
         return hourly_totals
 
-    for date_key in date_set:              # 遍历每个日期
-        for h in range(24):                # 遍历24小时
+    for date_key in date_set:  # 遍历每个日期
+        for h in range(24):  # 遍历24小时
             hourly_totals[h] += date_hour_counts[date_key].get(h, 0)  # 累加每小时计数
 
     return [t / num_dates for t in hourly_totals]  # 除以天数得到均值
 
 
 def _plot_hourly_comparison(
-    hourly_data: dict[str, list[float]],  # 传入数据：标签 -> 24小时数据列表
-    title: str,                           # 图表标题
-    filename: str,                        # 保存文件名
-    colors: dict[str, str],               # 标签 -> 颜色映射
+        hourly_data: dict[str, list[float]],  # 传入数据：标签 -> 24小时数据列表
+        title: str,  # 图表标题
+        filename: str,  # 保存文件名
+        colors: dict[str, str],  # 标签 -> 颜色映射
 ):
     """Generic helper to plot hourly line chart comparisons.
        通用辅助函数：绘制小时段折线对比图。
@@ -756,18 +824,18 @@ def _plot_hourly_comparison(
         colors:      标签到颜色的映射
     """
     fig, ax = plt.subplots(figsize=(12, 5))  # 12x5 英寸的宽图
-    hours = list(range(24))                   # x轴：0-23小时
+    hours = list(range(24))  # x轴：0-23小时
 
     for label, values in hourly_data.items():  # 为每个标签画一条折线
         ax.plot(hours, values, 'o-', label=label, color=colors.get(label),
                 linewidth=2, markersize=4, alpha=0.85)  # 'o-' 表示带圆点的折线
 
-    ax.set_xlabel('Hour of Day (UTC)')        # x轴：一天中的小时（UTC时区）
+    ax.set_xlabel('Hour of Day (UTC)')  # x轴：一天中的小时（UTC时区）
     ax.set_ylabel('Avg Questions per Hour per Day')  # y轴：每小时每日平均提问数
     ax.set_title(title, fontsize=13)
-    ax.set_xticks(range(0, 24, 2))            # x轴刻度：每2小时一个
-    ax.legend(fontsize=10)                    # 图例
-    ax.grid(axis='y', alpha=0.3)              # y轴网格线
+    ax.set_xticks(range(0, 24, 2))  # x轴刻度：每2小时一个
+    ax.legend(fontsize=10)  # 图例
+    ax.grid(axis='y', alpha=0.3)  # y轴网格线
     ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))  # y轴取整
 
     fig.tight_layout()
@@ -902,12 +970,12 @@ def dim_b3_per_holiday_hourly_vs_nonholiday(seekers: list[dict]):
     holiday_groups = defaultdict(list)
     for r in seekers:
         if r['period'] == 'holiday':
-            name = r['holiday_name'][:6]   # 取前6个字符作为组名
+            name = r['holiday_name'][:6]  # 取前6个字符作为组名
             holiday_groups[name].append(r)  # 添加到对应组
 
     # Filter: enough data（过滤掉数据量太少的节假日）
     holiday_groups = {k: v for k, v in holiday_groups.items()
-                     if len(v) >= MIN_DATA_ROWS}  # 提问数 ≥ MIN_DATA_ROWS
+                      if len(v) >= MIN_DATA_ROWS}  # 提问数 ≥ MIN_DATA_ROWS
     if not holiday_groups:
         log("  WARN: No holiday groups with sufficient data")
         return
@@ -918,11 +986,11 @@ def dim_b3_per_holiday_hourly_vs_nonholiday(seekers: list[dict]):
 
     # Per-holiday hourly values（计算每个节假日的逐小时值）
     group_names = sorted(holiday_groups.keys())  # 节假日名称排序
-    matrix = np.zeros((len(group_names), 24))    # 矩阵：行=节假日，列=小时
+    matrix = np.zeros((len(group_names), 24))  # 矩阵：行=节假日，列=小时
 
     for i, name in enumerate(group_names):
         group_dates = set(r['date'] for r in holiday_groups[name])  # 该节假日的日期集合
-        h_hourly = _hourly_avg(holiday_groups[name], group_dates)   # 该节假日的逐小时均值
+        h_hourly = _hourly_avg(holiday_groups[name], group_dates)  # 该节假日的逐小时均值
         for h in range(24):
             # Difference: holiday avg - non-holiday avg（节假日均值减去非节假日基线）
             matrix[i, h] = h_hourly[h] - nh_hourly[h]
@@ -984,7 +1052,7 @@ def dim_b4_per_holiday_hourly_vs_workday_weekend(seekers: list[dict]):
 
     # 过滤数据量太少的节假日
     holiday_groups = {k: v for k, v in holiday_groups.items()
-                     if len(v) >= MIN_DATA_ROWS}
+                      if len(v) >= MIN_DATA_ROWS}
     if not holiday_groups:
         log("  WARN: No holiday groups with sufficient data")
         return
@@ -992,8 +1060,8 @@ def dim_b4_per_holiday_hourly_vs_workday_weekend(seekers: list[dict]):
     # Workday and weekend hourly baselines
     workday_dates = set(r['date'] for r in seekers if r['period'] == 'workday')
     weekend_dates = set(r['date'] for r in seekers if r['period'] == 'weekend')
-    wd_hourly = _hourly_avg(seekers, workday_dates)   # 工作日逐小时基线
-    we_hourly = _hourly_avg(seekers, weekend_dates)   # 周末逐小时基线
+    wd_hourly = _hourly_avg(seekers, workday_dates)  # 工作日逐小时基线
+    we_hourly = _hourly_avg(seekers, weekend_dates)  # 周末逐小时基线
 
     group_names = sorted(holiday_groups.keys())
 
@@ -1067,9 +1135,9 @@ def main(data: dict = None):
 
     if data is None:
         # Load data（加载数据）
-        from movie.data_loader import load_all                    # 导入数据加载函数
-        data = load_all()                                          # 加载所有数据
-    seekers = data['seekers']                                  # 提取提问者数据
+        from movie.data_loader import load_all  # 导入数据加载函数
+        data = load_all()  # 加载所有数据
+    seekers = data['seekers']  # 提取提问者数据
 
     # ── Section A: Weekly period question frequency ──
     # 周周期：按天统计的提问频率
@@ -1078,13 +1146,13 @@ def main(data: dict = None):
     log("Section A: Weekly Period - Question Frequency")
     log("-" * 40)
 
-    dim_a1_holiday_vs_nonholiday_pie(seekers)                  # A1: 饼图-节假日vs非节假日
+    dim_a1_holiday_vs_nonholiday_pie(seekers)  # A1: 节假日vs非节假日 / 节假日vs工作日vs周末 日均提问数对比 (柱状图)
     log("")
-    dim_a2_holiday_workday_weekend_pie(seekers)                # A2: 饼图-节假日vs工作日vs周末
+    dim_a2_holiday_workday_weekend_pie(seekers)  # A2: 节假日vs工作日vs周末 日均提问数对比 (仅CSV, 已合并到A1)
     log("")
-    dim_a3_per_holiday_vs_nonholiday(seekers)                  # A3: 柱状图-各节假日vs非节假日
+    dim_a3_per_holiday_vs_nonholiday(seekers)  # A3: 各节假日vs非节假日 / vs工作日&周末 日均提问数对比 (柱状图+基线)
     log("")
-    dim_a4_per_holiday_vs_workday_weekend(seekers)             # A4: 柱状图-各节假日vs工作日vs周末
+    dim_a4_per_holiday_vs_workday_weekend(seekers)  # A4: 各节假日vs工作日&周末 日均提问数对比 (仅CSV, 已合并到A3)
 
     # ── Section A5-A6: Word length analysis ──
     # 周周期：提问单词数分组分析
@@ -1093,9 +1161,9 @@ def main(data: dict = None):
     log("Section A5-A6: Weekly Period - Word Length Distribution")
     log("-" * 40)
 
-    dim_a5_holiday_length(seekers)                              # A5: 柱状图-单词数分组
+    dim_a5_holiday_length(seekers)  # A5: 节假日vs非节假日/工作日/周末 单词数(1-10/11-30/31-100/100+)分布对比 (分组柱状图)
     log("")
-    dim_a6_per_holiday_length(seekers)                          # A6: 柱状图-各节假日单词数分组
+    dim_a6_per_holiday_length(seekers)  # A6: 各节假日单词数分布 vs 非节假日/工作日/周末基线 (双面板分组柱状图+基线)
 
     # ── Section B: Hourly access frequency ──
     # 日周期：按小时统计的访问频率
@@ -1104,13 +1172,13 @@ def main(data: dict = None):
     log("Section B: Hourly Period - Access Frequency")
     log("-" * 40)
 
-    dim_b1_hourly_holiday_vs_nonholiday(seekers)               # B1: 折线图-节假日vs非节假日逐小时
+    dim_b1_hourly_holiday_vs_nonholiday(seekers)  # B1: 节假日vs非节假日 / 节假日vs工作日vs周末 逐小时(0-23h)平均提问数 (折线图)
     log("")
-    dim_b2_hourly_holiday_workday_weekend(seekers)             # B2: 折线图-节假日vs工作日vs周末逐小时
+    dim_b2_hourly_holiday_workday_weekend(seekers)  # B2: 节假日vs工作日vs周末 逐小时平均提问数 (仅CSV, 已合并到B1)
     log("")
-    dim_b3_per_holiday_hourly_vs_nonholiday(seekers)           # B3: 热力图-各节假日vs非节假日逐小时差值
+    dim_b3_per_holiday_hourly_vs_nonholiday(seekers)  # B3: 各节假日逐小时 vs 非节假日基线 差值热力图
     log("")
-    dim_b4_per_holiday_hourly_vs_workday_weekend(seekers)      # B4: 双热力图-各节假日vs工作日/周末逐小时差值
+    dim_b4_per_holiday_hourly_vs_workday_weekend(seekers)  # B4: 各节假日逐小时 vs 工作日/周末基线 双差值热力图
 
     log("")
     log("=" * 60)

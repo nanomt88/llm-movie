@@ -15,33 +15,35 @@ Input: user seeker records with IMDB IDs
 Output: output/movie/step9/*.png + CSV + GEXF (for Gephi)
 """
 
-import os
-import csv
-from collections import defaultdict, Counter
-from itertools import combinations
+import os           # 文件路径操作
+import csv          # CSV 读写
+from collections import defaultdict, Counter   # 默认字典与计数器
+from itertools import combinations              # 组合生成（用于电影对）
 
-import numpy as np
-import networkx as nx
+import numpy as np          # 数值计算
+import networkx as nx       # 复杂网络分析库
 
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg')       # 非交互式后端（服务器环境）
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_rgba_array
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
 from movie.utils.genre_map import to_en
 
+# ── 初始化 ──────────────────────────────────────────────────────────
 setup_matplotlib()
-STEP_OUT = STEP_DIRS[9]
+STEP_OUT = STEP_DIRS[9]                 # 输出目录：output/movie/step9/
 os.makedirs(STEP_OUT, exist_ok=True)
 
-# ── Constants ──────────────────────────────────────────────────────────
-MIN_COOCCURRENCE = 2        # Minimum times two movies co-occur to keep edge
-TOP_N_NODES = 50            # Max nodes in network viz
-MAX_EDGE_WIDTH = 6          # Max edge width in visualization
-NODE_MIN_SIZE = 200         # Min node size in visualization
-NODE_MAX_SIZE = 2000        # Max node size in visualization
+# ── 网络可视化参数 ──────────────────────────────────────────────────
+MIN_COOCCURRENCE = 2        # 最小共现次数，低于此值不保留边
+TOP_N_NODES = 50            # 网络图中显示的最大节点数
+MAX_EDGE_WIDTH = 6          # 边最大宽度
+NODE_MIN_SIZE = 200         # 节点最小面积
+NODE_MAX_SIZE = 2000        # 节点最大面积
 
+# 各电影类型的配色方案
 GENRE_COLORS = [
     '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
     '#1abc9c', '#e67e22', '#34495e', '#f1c40f', '#16a085',
@@ -51,7 +53,7 @@ GENRE_COLORS = [
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Co-occurrence computation
+#  共现计算
 # ═══════════════════════════════════════════════════════════════════════
 
 def _extract_movie_pairs(seekers: list[dict]) -> list[tuple[str, str]]:
@@ -63,8 +65,7 @@ def _extract_movie_pairs(seekers: list[dict]) -> list[tuple[str, str]]:
     for r in seekers:
         ids = r.get('imdb_ids', [])
         if len(ids) >= 2:
-            # Sort to avoid (A,B) vs (B,A) duplicates
-            sorted_ids = sorted(set(ids))
+            sorted_ids = sorted(set(ids))       # 去重排序，避免 (A,B) vs (B,A)
             for a, b in combinations(sorted_ids, 2):
                 pairs.append((a, b))
     return pairs
@@ -76,29 +77,35 @@ def _build_cooccurrence_graph(
     date_set: set = None,
 ) -> nx.Graph:
     """Build movie co-occurrence graph from seekers, optionally filtered by date set.
-       从用户提问记录构建电影共现图，可按日期集合过滤。"""
-    # Count individual movie mentions
-    mention_counter: Counter = Counter()
-    pair_counter: Counter = Counter()
+       从用户提问记录构建电影共现图，可按日期集合过滤。
+    Args:
+        seekers: 用户提问记录列表
+        movie_info: 电影信息字典 {imdb_id: {title, year, genres, ...}}
+        date_set: 可选日期集合，仅包含该集合中的日期
+    Returns:
+        NetworkX 无向图，节点属性含 mentions/title/year/genres，边权重为共现次数
+    """
+    mention_counter: Counter = Counter()    # 统计每部电影出现在多少条记录中
+    pair_counter: Counter = Counter()       # 统计每对电影共现次数
 
     for r in seekers:
         if date_set is not None and r['date'] not in date_set:
-            continue
+            continue                        # 按日期过滤
         ids = r.get('imdb_ids', [])
         if not ids:
             continue
-        # Count mentions
+        # 统计提及次数（同一记录中每部电影只计一次）
         for mid in set(ids):
             mention_counter[mid] += 1
-        # Count co-occurrences
+        # 统计共现次数
         if len(set(ids)) >= 2:
             for a, b in combinations(sorted(set(ids)), 2):
                 pair_counter[(a, b)] += 1
 
-    # Build graph
+    # 构建图
     G = nx.Graph()
 
-    # Add nodes with mention count as weight
+    # 添加节点，附带电影元信息
     for mid, count in mention_counter.items():
         info = movie_info.get(mid, {})
         title = info.get('original_title', '') if isinstance(info, dict) else ''
@@ -107,7 +114,7 @@ def _build_cooccurrence_graph(
         G.add_node(mid, mentions=count, title=title, year=year,
                    genres=','.join(genres) if genres else '')
 
-    # Add edges
+    # 添加边（仅保留共现次数 >= MIN_COOCCURRENCE 的边）
     for (a, b), count in pair_counter.items():
         if count >= MIN_COOCCURRENCE:
             G.add_edge(a, b, weight=count)
@@ -119,7 +126,7 @@ def _get_genre_color(genres_str: str, genre_color_map: dict) -> str:
     """Assign a color to a node based on its primary genre.
        根据主要类型为节点分配颜色。"""
     if not genres_str:
-        return '#95a5a6'  # Gray for unknown
+        return '#95a5a6'  # 无类型信息时用灰色
     genre_list = [g.strip() for g in genres_str.split(',')]
     for g in genre_list:
         eng = to_en(g)
@@ -134,12 +141,17 @@ def _plot_network(
     max_nodes: int = TOP_N_NODES,
 ):
     """Plot a co-occurrence network graph.
-       绘制共现网络图。"""
+       绘制共现网络图。
+    Args:
+        G: 网络图
+        title: 图表标题
+        filename: 输出文件名
+        max_nodes: 最多显示的节点数（按度排序取 top）"""
     if G.number_of_nodes() == 0:
         log(f"  Empty graph for {filename}")
         return
 
-    # Subgraph: keep top nodes by degree
+    # 取度最高的子图
     top_nodes = sorted(G.nodes(), key=lambda n: G.degree(n), reverse=True)[:max_nodes]
     H = G.subgraph(top_nodes).copy()
 
@@ -147,7 +159,7 @@ def _plot_network(
         log(f"  Too few nodes ({H.number_of_nodes()}) for {filename}")
         return
 
-    # Node sizes by mentions
+    # 根据提及次数映射节点大小（线性缩放）
     mentions = [H.nodes[n].get('mentions', 1) for n in H.nodes()]
     node_sizes = [
         NODE_MIN_SIZE + (m - min(mentions)) / max(max(mentions) - min(mentions), 1)
@@ -155,7 +167,7 @@ def _plot_network(
         for m in mentions
     ]
 
-    # Edge widths by weight
+    # 根据权重映射边粗细
     edge_weights = [H.edges[e].get('weight', 1) for e in H.edges()]
     edge_widths = [
         0.5 + (w - min(edge_weights)) / max(max(edge_weights) - min(edge_weights), 1)
@@ -163,14 +175,14 @@ def _plot_network(
         for w in edge_weights
     ]
 
-    # Assign colors by genre
+    # 根据类型分配节点颜色
     genre_color_map = {}
     color_idx = 0
     node_colors = []
     for n in H.nodes():
         g = H.nodes[n].get('genres', '')
         if g:
-            primary = g.split(',')[0].strip()
+            primary = g.split(',')[0].strip()       # 取第一个类型为主要类型
             eng = to_en(primary)
             if eng not in genre_color_map:
                 genre_color_map[eng] = GENRE_COLORS[color_idx % len(GENRE_COLORS)]
@@ -179,31 +191,33 @@ def _plot_network(
         else:
             node_colors.append('#95a5a6')
 
-    # Layout
+    # 布局：Spring layout（力导向布局）
     pos = nx.spring_layout(H, k=3 / max(H.number_of_nodes()**0.5, 0.5),
                            iterations=50, seed=42)
 
     fig, ax = plt.subplots(figsize=(14, 10))
 
+    # 绘制边
     nx.draw_networkx_edges(
         H, pos, ax=ax, alpha=0.3,
         width=edge_widths, edge_color='#888888',
     )
 
+    # 绘制节点
     nx.draw_networkx_nodes(
         H, pos, ax=ax, node_size=node_sizes,
         node_color=node_colors, alpha=0.85, edgecolors='#333333',
         linewidths=0.5,
     )
 
-    # Labels for top-mention nodes
+    # 为提及次数最高的 15 个节点添加标签
     top_mention_nodes = sorted(H.nodes(), key=lambda n: H.nodes[n].get('mentions', 0),
                                reverse=True)[:15]
     labels = {}
     for n in top_mention_nodes:
-        title = H.nodes[n].get('title', '')
+        title_text = H.nodes[n].get('title', '')
         year = H.nodes[n].get('year', '')
-        labels[n] = f'{title}\n({year})' if title and year else n
+        labels[n] = f'{title_text}\n({year})' if title_text and year else n
 
     nx.draw_networkx_labels(
         H, pos, ax=ax, labels=labels, font_size=7,
@@ -221,7 +235,7 @@ def _plot_network(
 
 def _save_gexf(G: nx.Graph, filename: str):
     """Save graph in GEXF format for Gephi.
-       以 GEXF 格式保存图，可用 Gephi 可视化。"""
+       以 GEXF 格式保存图，可用 Gephi 做进一步可视化。"""
     if G.number_of_nodes() < 2:
         return
     path = os.path.join(STEP_OUT, filename)
@@ -264,30 +278,30 @@ def _save_node_csv(G: nx.Graph, filename: str):
 
 def _network_stats(G: nx.Graph, label: str = "Network"):
     """Print basic network statistics.
-       打印网络基本统计量。"""
+       打印网络基本统计量：节点数、边数、密度、连通分量、度分布等。"""
     if G.number_of_nodes() == 0:
         log(f"  {label}: empty graph")
         return
 
     log(f"  {label}:")
-    log(f"    Nodes: {G.number_of_nodes()}")
-    log(f"    Edges: {G.number_of_edges()}")
-    log(f"    Density: {nx.density(G):.6f}")
+    log(f"    Nodes: {G.number_of_nodes()}")          # 节点数
+    log(f"    Edges: {G.number_of_edges()}")          # 边数
+    log(f"    Density: {nx.density(G):.6f}")          # 网络密度
 
-    # Components
+    # 连通分量
     components = list(nx.connected_components(G))
-    log(f"    Components: {len(components)}")
+    log(f"    Components: {len(components)}")         # 连通分量数
     if components:
         largest = max(components, key=len)
         log(f"    Largest component: {len(largest)} nodes ({100*len(largest)/G.number_of_nodes():.1f}%)")
 
-    # Degree stats
+    # 度统计
     degrees = [d for _, d in G.degree()]
     if degrees:
         log(f"    Avg degree: {np.mean(degrees):.2f}")
         log(f"    Max degree: {max(degrees)}")
 
-    # Centrality
+    # 度最高的 top 5 节点
     top_nodes = sorted(G.nodes(), key=lambda n: G.degree(n), reverse=True)[:5]
     for n in top_nodes:
         title = G.nodes[n].get('title', n)
@@ -295,7 +309,7 @@ def _network_stats(G: nx.Graph, label: str = "Network"):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Analysis dimensions
+#  分析维度
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_n1_overall_network(seekers: list[dict], movie_info: dict):
@@ -304,9 +318,11 @@ def dim_n1_overall_network(seekers: list[dict], movie_info: dict):
     log("=" * 50)
     log("N1: Overall Co-occurrence Network")
 
+    # 构建全量共现图
     G = _build_cooccurrence_graph(seekers, movie_info)
     _network_stats(G, "Overall")
 
+    # 输出：可视化图 + GEXF + CSV
     _plot_network(G, 'Movie Co-occurrence Network (Overall)',
                   'n1_overall_network.png')
     _save_gexf(G, 'n1_overall_network.gexf')
@@ -324,6 +340,7 @@ def dim_n2_holiday_vs_nonholiday_network(
     log("=" * 50)
     log("N2: Holiday vs Non-Holiday Co-occurrence Network")
 
+    # 按日期分别构建节假日和非节假日子图
     h_dates = set(r['date'] for r in seekers if r['period'] == 'holiday')
     nh_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
 
@@ -348,6 +365,7 @@ def dim_n3_top_cooccurrences(seekers: list[dict], movie_info: dict):
     log("=" * 50)
     log("N3: Top Co-occurring Movie Pairs")
 
+    # 统计所有共现对
     pair_counter: Counter = Counter()
     for r in seekers:
         ids = r.get('imdb_ids', [])
@@ -355,6 +373,7 @@ def dim_n3_top_cooccurrences(seekers: list[dict], movie_info: dict):
             for a, b in combinations(sorted(set(ids)), 2):
                 pair_counter[(a, b)] += 1
 
+    # 取 top 30 并打印 top 10
     top_pairs = pair_counter.most_common(30)
     log(f"  Top 10 co-occurring pairs:")
     for (a, b), cnt in top_pairs[:10]:
@@ -369,7 +388,7 @@ def dim_n3_top_cooccurrences(seekers: list[dict], movie_info: dict):
         except UnicodeEncodeError:
             log(f"    [unicode title] <-> [unicode title]: {cnt}")
 
-    # Save CSV
+    # 保存到 CSV
     csv_path = os.path.join(STEP_OUT, 'n3_top_cooccurrences.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
@@ -397,7 +416,8 @@ def dim_n4_network_centrality(G: nx.Graph):
         log("  Graph too small for centrality analysis")
         return
 
-    # Degree centrality
+    # ── 度中心度（Degree Centrality）──
+    # 度量节点直接连接的数量，反映节点在网络中的活跃程度
     deg_cent = nx.degree_centrality(G)
     top_deg = sorted(deg_cent.items(), key=lambda x: x[1], reverse=True)[:10]
 
@@ -409,7 +429,9 @@ def dim_n4_network_centrality(G: nx.Graph):
         except UnicodeEncodeError:
             log(f"    [unicode title]: {val:.4f}")
 
-    # Betweenness centrality (compute on largest component for speed)
+    # ── 中介中心度（Betweenness Centrality）──
+    # 度量节点在最短路径中的重要性，反映节点在信息流中的桥梁作用
+    # 为提高速度，仅计算最大连通分量
     largest_cc = max(nx.connected_components(G), key=len)
     H = G.subgraph(largest_cc).copy()
     if H.number_of_nodes() < 3:
@@ -426,7 +448,7 @@ def dim_n4_network_centrality(G: nx.Graph):
         except UnicodeEncodeError:
             log(f"    [unicode title]: {val:.4f}")
 
-    # Save centrality CSV
+    # 保存中心度到 CSV
     csv_path = os.path.join(STEP_OUT, 'n4_network_centrality.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
@@ -446,11 +468,11 @@ def dim_n4_network_centrality(G: nx.Graph):
 
 def dim_n5_genre_cooccurrence(seekers: list[dict], movie_info: dict):
     """Genre-level co-occurrence network.
-       题材级共现网络分析。"""
+       题材级共现网络分析：从电影共现关系中提取类型之间的关系。"""
     log("=" * 50)
     log("N5: Genre Co-occurrence Network")
 
-    # For each seeker, extract genres of mentioned movies
+    # 对每条记录，提取提及电影的类型，统计跨电影的类型共现
     genre_pairs = []
     for r in seekers:
         ids = r.get('imdb_ids', [])
@@ -462,13 +484,13 @@ def dim_n5_genre_cooccurrence(seekers: list[dict], movie_info: dict):
             if isinstance(info, dict):
                 gs = info.get('genres', [])
                 genres_per_movie.append([to_en(g) for g in gs if g])
-        # Cross-movie genre pairs
+        # 跨电影生成类型对（同一记录中不同电影的类型之间）
         genre_sets = [set(gs) for gs in genres_per_movie if gs]
         for i in range(len(genre_sets)):
             for j in range(i + 1, len(genre_sets)):
                 for g1 in genre_sets[i]:
                     for g2 in genre_sets[j]:
-                        if g1 < g2:  # alphabetical order
+                        if g1 < g2:
                             genre_pairs.append((g1, g2))
                         else:
                             genre_pairs.append((g2, g1))
@@ -480,7 +502,7 @@ def dim_n5_genre_cooccurrence(seekers: list[dict], movie_info: dict):
     for (g1, g2), cnt in top_pairs[:10]:
         log(f"    {g1} <-> {g2}: {cnt}")
 
-    # Build genre graph
+    # 构建类型共现图
     G = nx.Graph()
     for (g1, g2), cnt in pair_counter.items():
         if cnt >= MIN_COOCCURRENCE:
@@ -490,7 +512,7 @@ def dim_n5_genre_cooccurrence(seekers: list[dict], movie_info: dict):
         _plot_network(G, 'Genre Co-occurrence Network',
                       'n5_genre_cooccurrence.png')
 
-    # Save CSV
+    # 保存 CSV
     csv_path = os.path.join(STEP_OUT, 'n5_genre_cooccurrence.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
@@ -501,7 +523,7 @@ def dim_n5_genre_cooccurrence(seekers: list[dict], movie_info: dict):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Main
+#  主函数
 # ═══════════════════════════════════════════════════════════════════════
 
 def main(data: dict = None):
@@ -509,6 +531,7 @@ def main(data: dict = None):
     log("Step 9: Co-occurrence Network & Sentiment Analysis")
     log("=" * 60)
 
+    # 加载数据
     if data is None:
         from movie.data_loader import load_all
         data = load_all()
@@ -516,24 +539,24 @@ def main(data: dict = None):
     movie_info = data['movie_info']
     log(f"Loaded {len(seekers)} seeker records")
 
-    # N1: Overall network
+    # N1: 全局共现网络
     G = dim_n1_overall_network(seekers, movie_info)
     log("")
 
-    # N2: Holiday vs non-holiday
+    # N2: 节假日 vs 非节假日网络对比
     dim_n2_holiday_vs_nonholiday_network(seekers, movie_info)
     log("")
 
-    # N3: Top co-occurrences
+    # N3: Top 共现电影对
     dim_n3_top_cooccurrences(seekers, movie_info)
     log("")
 
-    # N4: Centrality analysis
+    # N4: 网络中心度分析
     if G and G.number_of_nodes() > 0:
         dim_n4_network_centrality(G)
         log("")
 
-    # N5: Genre co-occurrence
+    # N5: 类型共现网络
     dim_n5_genre_cooccurrence(seekers, movie_info)
 
     log("")
