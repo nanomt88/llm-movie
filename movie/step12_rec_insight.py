@@ -30,19 +30,36 @@ STEP_OUT = STEP_DIRS[12]
 os.makedirs(STEP_OUT, exist_ok=True)
 
 # ── Module-level cache for full-row scan ───────────────────────────────
-_CONV_SYSTEM_CACHE: dict[str, list[str]] | None = None
+_CONV_SYSTEM_CACHE: dict[tuple[str, str], list[str]] | None = None
 
 
-def _build_conv_system(all_rows: list[dict]) -> dict[str, list[str]]:
-    """Build session_id -> list of system reply processed_raw texts.
+def _parse_conv_turn(conv_id: str) -> tuple[str, str]:
+    """Parse (session_id, turn_number) from conv_id.
+    从 conv_id 中解析出 (会话ID, 轮次编号)。
 
+    conv_id 格式：{session_id}_{current_turn}/{total_turns}
+    示例：t3_rt7enj_1/14 → ('t3_rt7enj', '1')
+    """
+    if '_' not in conv_id:
+        return (conv_id, '')
+    session_id = conv_id.rsplit('_', 1)[0]
+    turn_part = conv_id.rsplit('_', 1)[1]
+    turn_num = turn_part.split('/')[0] if '/' in turn_part else turn_part
+    return (session_id, turn_num)
+
+
+def _build_conv_system(all_rows: list[dict]) -> dict[tuple[str, str], list[str]]:
+    """Build (session_id, turn_num) -> list of system reply processed_raw texts.
+
+    Uses turn-level keys so each seeker only gets the system reply from the
+    same turn, avoiding cross-turn genre contamination.
     Cached at module level so N1 and N2 don't each scan 1.6M rows.
     """
     global _CONV_SYSTEM_CACHE
     if _CONV_SYSTEM_CACHE is not None:
         return _CONV_SYSTEM_CACHE
 
-    conv_system: dict[str, list[str]] = {}
+    conv_system: dict[tuple[str, str], list[str]] = {}
     for row in all_rows:
         is_seeker = row.get('is_seeker', False)
         if is_seeker:
@@ -51,10 +68,10 @@ def _build_conv_system(all_rows: list[dict]) -> dict[str, list[str]]:
         if not processed:
             continue
         conv_id = row.get('conv_id', '')
-        base_id = conv_id.rsplit('_', 1)[0] if '_' in conv_id else conv_id
-        if base_id not in conv_system:
-            conv_system[base_id] = []
-        conv_system[base_id].append(processed)
+        key = _parse_conv_turn(conv_id)  # (session_id, turn_num)
+        if key not in conv_system:
+            conv_system[key] = []
+        conv_system[key].append(processed)
 
     _CONV_SYSTEM_CACHE = conv_system
     return conv_system
@@ -193,7 +210,7 @@ def _build_seeker_genres(
     """Augment seekers with genre info from system replies.
 
     Same approach as step5_genre._build_seeker_genres.
-    Caches session-level genre data for performance.
+    Caches turn-level genre data for performance.
 
     Args:
         seekers: List of seeker records.
@@ -206,21 +223,20 @@ def _build_seeker_genres(
     # Phase 1: Get system replies from cache (avoids re-scanning 1.6M rows)
     conv_system = _build_conv_system(all_rows)
 
-    # Phase 2: Pre-compute genres per session (cache, not per-seeker)
+    # Phase 2: Pre-compute genres per turn (cache, not per-seeker)
     tt_pattern = re.compile(r'\b(tt\d+)\b')
-    session_genres_cache: dict[str, set[str]] = {}
+    turn_genres_cache: dict[tuple[str, str], set[str]] = {}
 
-    # Collect all unique base_ids from seekers first
-    need_sessions = set()
+    # Collect all unique (session_id, turn_num) keys from seekers first
+    need_turns = set()
     for r in seekers:
         conv_id = r.get('conv_id', '')
-        base_id = conv_id.rsplit('_', 1)[0] if '_' in conv_id else conv_id
-        need_sessions.add(base_id)
+        need_turns.add(_parse_conv_turn(conv_id))
 
-    for base_id in need_sessions:
-        system_msgs = conv_system.get(base_id, [])
+    for key in need_turns:
+        system_msgs = conv_system.get(key, [])
         if not system_msgs:
-            session_genres_cache[base_id] = {'unknown'}
+            turn_genres_cache[key] = {'unknown'}
             continue
 
         movie_ids = set()
@@ -235,15 +251,15 @@ def _build_seeker_genres(
                 if genre_list:
                     genres_found.update(g.strip() for g in genre_list if g.strip())
 
-        session_genres_cache[base_id] = genres_found if genres_found else {'unknown'}
+        turn_genres_cache[key] = genres_found if genres_found else {'unknown'}
 
     # Phase 3: Assign cached genres to each seeker
     result = []
     for r in seekers:
         conv_id = r.get('conv_id', '')
-        base_id = conv_id.rsplit('_', 1)[0] if '_' in conv_id else conv_id
+        key = _parse_conv_turn(conv_id)
         rec = dict(r)
-        rec['genres'] = session_genres_cache.get(base_id, {'unknown'})
+        rec['genres'] = turn_genres_cache.get(key, {'unknown'})
         result.append(rec)
     return result
 

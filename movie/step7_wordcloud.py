@@ -137,6 +137,17 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
 ALL_STOPWORDS = STOPWORDS | DOMAIN_STOP       # 合并停用词总表
 
 
+def _annotate_heatmap(ax, data, fmt='.1f', fs=6):
+    """在imshow热力图上标注数值"""
+    arr = data.data if isinstance(data, np.ma.MaskedArray) else np.asarray(data)
+    for i in range(arr.shape[0]):
+        for j in range(arr.shape[1]):
+            v = arr[i, j]
+            if not np.isnan(v) and abs(v) > 1e-6:
+                ax.text(j, i, format(float(v), fmt), ha='center', va='center',
+                        fontsize=fs, color='black')
+
+
 # ── 词频计算 ────────────────────────────────────────────────────────
 
 def tokenize(text: str) -> list[str]:
@@ -776,6 +787,7 @@ def dim_w5_per_holiday_words_heatmap(seekers: list[dict]):
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
     im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-3, vmax=3)
+    _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
 
     ax.set_xticks(range(n))
     ax.set_xticklabels(holiday_names, rotation=45, ha='right', fontsize=8)

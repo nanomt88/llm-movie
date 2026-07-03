@@ -45,6 +45,18 @@ setup_matplotlib()  # 初始化 matplotlib 样式（字体等）
 STEP_OUT = STEP_DIRS[5]  # 步骤 5 的输出目录路径（output/movie/step5/）
 os.makedirs(STEP_OUT, exist_ok=True)  # 创建输出目录（如果已存在则不报错）
 
+
+def _annotate_heatmap(ax, data, fmt='.1f', fs=6):
+    """在imshow热力图上标注数值"""
+    arr = data.data if isinstance(data, np.ma.MaskedArray) else np.asarray(data)
+    for i in range(arr.shape[0]):
+        for j in range(arr.shape[1]):
+            v = arr[i, j]
+            if not np.isnan(v) and abs(v) > 1e-6:
+                ax.text(j, i, format(float(v), fmt), ha='center', va='center',
+                        fontsize=fs, color='black')
+
+
 TT_PATTERN = re.compile(r'\b(tt\d+)\b')  # 正则：匹配 IMDb 电影 ID（tt 后跟数字，如 tt1234567）
 
 # Genre color palette (up to ~20 genres)
@@ -65,6 +77,33 @@ TOP_N_GENRES = 20
 #  Helper: extract genres for each user seeker record
 #  辅助函数：为每条用户提问记录提取影片类型
 # ═══════════════════════════════════════════════════════════════════════
+# 【功能】
+#   遍历所有行（包括用户提问和系统回复），为每个用户提问记录找到关联的电影类型
+#   电影类型信息存储在 movie_info 字典中（从 movie_info.csv 加载）
+#   关联方式:
+#     - conv_id 格式: {session_id}_{current_turn}/{total_turns}，如 t3_rt7enj_1/14
+#     - 从 conv_id 中解析 session_id（最后一个 _ 之前）和 turn_num（/ 之前）
+#     - 系统回复与用户提问按 (session_id, turn_num) 精确配对
+#     - 只取同一轮次的系统回复，不会跨轮次污染
+#     - 从系统回复的 processed_raw 中提取 tt 开头的电影 ID
+#     - 用电影 ID 在 movie_info 中查找对应的 genres 列表
+# 
+# 【数据结构】
+#   conv_system: dict[tuple[str, str], list[str]]
+#     键=(session_id, turn_num) — 精确到会话的某一轮次
+#     值=该轮次系统回复的 processed_raw 文本列表（通常只有一条）
+# 
+#   seeker_genres 输出:
+#     在原始记录上添加 'genres' 字段（set 类型）
+#     如果未找到任何类型，默认为 {'unknown'}
+#     每条原始记录（一个 seeker 行） → 一条输出记录（genres 追加）
+# 
+# 【性能说明】
+#   遍历 all_rows 一次构建 conv_system
+#   遍历 seekers 一次匹配类型
+#   使用 set 去重: 每个电影 ID 只计一次，每种类型只计一次
+#   使用 (session_id, turn_num) 二元组作为 key 而非简单字符串
+# ═══════════════════════════════════════════════════════════════════════
 
 def _extract_movie_ids(processed_field_str: str) -> list[str]:
     """Extract tt... movie IDs from a processed field string.
@@ -79,46 +118,48 @@ def _build_seeker_genres(
 ) -> list[dict]:
     """
     Augment seekers with genre info by matching system replies in the
-    same conversation.  Returns list of dicts with 'genre' key added,
+    same conversation turn.  Returns list of dicts with 'genre' key added,
     one entry per seeker x movie_id found.
-    通过匹配同一会话中的系统回复，为用户提问记录增加影片类型信息。
+    通过匹配同一会话同一轮次中的系统回复，为用户提问记录增加影片类型信息。
     返回字典列表，每个字典增加了 'genres' 键。
     每条记录对应该用户提问中提到的每部电影。
     """
-    # Build conv_id -> list of system reply processed fields
-    # 构建会话 ID -> 系统回复的处理后文本列表
-    # conv_id base: first 9 chars of session_id + rest after last '_'
-    # conv_id 格式：会话ID_当前轮次/总轮次
-    # Actually conv_id format: {session_id}_{current_turn}/{total_turns}
-    # conv_id 格式实际为：{session_id}_{current_turn}/{total_turns}
-    # We match by session_id (first 9 chars of conv_id)
-    # 我们通过 conv_id 的前 9 个字符（session_id）进行匹配
-    conv_system = defaultdict(list)  # 会话基标识符 -> 系统回复文本列表
-    for row in all_rows:  # 遍历所有行（包括用户提问和系统回复）
-        # row from load_all -> conv_id, processed_raw
-        # 从 load_all 加载的行包含 conv_id 和 processed_raw 字段
-        conv_id = row.get('conv_id', '')  # 获取会话 ID
-        processed = row.get('processed_raw', row.get('processed', ''))  # 获取处理后文本（优先使用 processed_raw）
-        is_seeker = row.get('is_seeker', False)  # 是否为用户提问（True 为用户，False 为系统）
+    def _parse_conv_turn(conv_id: str) -> tuple[str, str]:
+        """Parse (session_id, turn_number) from conv_id.
+        从 conv_id 中解析出 (会话ID, 轮次编号)。
+        conv_id 格式：{session_id}_{current_turn}/{total_turns}
+        示例：t3_rt7enj_1/14 → ('t3_rt7enj', '1')"""
+        if '_' not in conv_id:
+            return (conv_id, '')
+        session_id = conv_id.rsplit('_', 1)[0]  # 取最后一个 _ 之前的部分 = 会话ID
+        turn_part = conv_id.rsplit('_', 1)[1]    # 取最后一个 _ 之后的部分 = "1/14"
+        turn_num = turn_part.split('/')[0] if '/' in turn_part else turn_part  # 提取轮次号 "1"
+        return (session_id, turn_num)
 
-        # SYSTEM reply (not seeker)
+    # Build (session_id, turn_num) -> list of system reply processed fields
+    # 构建 (会话ID, 轮次号) -> 系统回复文本列表
+    # 每个系统回复按 (session_id, turn_number) 精确匹配到对应的用户提问
+    conv_system = defaultdict(list)
+    for row in all_rows:
+        conv_id = row.get('conv_id', '')
+        processed = row.get('processed_raw', row.get('processed', ''))
+        is_seeker = row.get('is_seeker', False)
+
         # 只处理系统回复（不是用户提问）
-        if not is_seeker and processed:  # 如果是系统回复且有文本内容
-            # Extract base session from conv_id: everything before last '_'
-            # 从 conv_id 中提取基会话标识：最后一个 '_' 之前的部分
-            base_id = conv_id.rsplit('_', 1)[0] if '_' in conv_id else conv_id
-            conv_system[base_id].append(processed)  # 将该回复文本加入对应的会话列表
+        if not is_seeker and processed:
+            key = _parse_conv_turn(conv_id)  # (session_id, turn_num)
+            conv_system[key].append(processed)
 
     result = []  # 存储增加了影片类型信息的记录
     for r in seekers:  # 遍历每条用户提问记录
         conv_id = r.get('conv_id', '')  # 获取会话 ID
-        base_id = conv_id.rsplit('_', 1)[0] if '_' in conv_id else conv_id  # 提取基会话标识
-        system_msgs = conv_system.get(base_id, [])  # 获取该会话中所有系统回复文本
+        key = _parse_conv_turn(conv_id)  # (session_id, turn_num) 精确匹配轮次
+        system_msgs = conv_system.get(key, [])  # 获取同一会话同一轮次的系统回复
 
-        # Collect all movie IDs from system replies in this conversation
-        # 收集该会话所有系统回复中提到的电影 ID
+        # Collect all movie IDs from system replies in this conversation turn
+        # 收集该会话该轮次系统回复中提到的电影 ID
         movie_ids = set()  # 使用集合自动去重
-        for msg in system_msgs:  # 遍历每条系统回复
+        for msg in system_msgs:  # 遍历每条系统回复（通常只有一条）
             movie_ids.update(_extract_movie_ids(str(msg)))  # 提取其中的电影 ID 并加入集合
 
         # Gather genres for these movie IDs
@@ -138,6 +179,17 @@ def _build_seeker_genres(
     return result  # 返回扩展后的记录列表
 
 
+# ── Genre Mention Counter 类型提及统计 ──────────────────────────────────
+# 【功能】统计指定日期集合中各电影类型的提及次数
+#   输入: seeker_genres（增强后的用户提问记录）+ date_set（目标日期集合）
+#   输出: {genre: int} 每个类型被提及的总次数
+#   注意: 每条记录中每种类型只计一次（使用 set 去重，Counter 累加）
+#         但不同类型的记录数不同，同一类型在不同记录中多次出现时累加
+# 【调用者】
+#   J1/J2: 计算节假日/工作日/周末各类型日均提及（除以天数）
+#   J3/J4/J5: 计算各节假日内各类型的提及次数
+# ═══════════════════════════════════════════════════════════════════════
+
 def _genre_mention_counts(
     seeker_genres: list[dict], date_set: set) -> dict[str, int]:
     """Count genre mentions (unique per record) for dates in date_set.
@@ -149,6 +201,23 @@ def _genre_mention_counts(
                 counter[g] += 1  # 对应类型计数加 1
     return dict(counter)  # 返回字典格式的计数结果
 
+
+# ── Hourly Genre Mention Counter 逐小时类型提及统计 ────────────────────
+# 【功能】计算指定日期集合中每个类型在 0-23 小时的日均提及次数
+#   输入: seeker_genres + date_set
+#   输出: {genre: [24 floats]} 每个类型一个 24 元素列表
+#         每个 float = 该小时的总提及数 / 总天数（日平均值）
+# 【数据结构】
+#   dh_genre_counter: dict[str, dict[tuple[int, str], int]]
+#     键路径: date → (hour, genre) → count
+#     示例: {'2022-01-01': {(14, 'Drama'): 3, (15, 'Comedy'): 1}}
+#   hour_genre_total: dict[str, list[int]]
+#     键=类型, 值=[0]*24, 跨日期累加每小时计数
+# 【核心逻辑】
+#   phase 1: 按日期-小时-类型统计原始计数
+#   phase 2: 跨日期聚合，累加至 hour_genre_total[g][h]
+#   phase 3: 除以 date_set 大小得日均值
+# ═══════════════════════════════════════════════════════════════════════
 
 def _genre_hourly_mention_counts(
     seeker_genres: list[dict], date_set: set) -> dict[str, list[float]]:
@@ -183,6 +252,31 @@ def _genre_hourly_mention_counts(
         result[g] = [v / num_dates for v in vals]  # 除以天数得到每小时平均提及次数
     return result  # 返回结果
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Helper: Grouped Bar Chart for Genre Mention Stats
+#  辅助函数：电影类型日均提及分组柱状图
+# ═══════════════════════════════════════════════════════════════════════
+# 【功能】绘制多分组对比柱状图，X轴=类型名称，每组类型有多根柱子
+#   用于 J1（2组: Holiday/Non-holiday）和 J2（3组: Holiday/Workday/Weekend）
+#   自动确定热门类型、分配颜色、标注轴标签和图例
+#
+# 【参数】
+#   stats:   {'group_name': {genre: avg_daily, ...}, ...}
+#   title:   图表标题
+#   filename: 输出 PNG 文件名（不含路径）
+#   top_n:   显示前 N 个热门类型（默认 TOP_N_GENRES=20）
+#
+# 【返回值】
+#   top_genres: list[str] 前 N 个类型名称列表，供 CSV 输出使用
+#
+# 【渲染流程】
+#   1. 合并所有分组中的类型，按总提及数排序取前 top_n
+#   2. 对每个分组计算柱子偏移量 (group_idx - (n-1)/2) * width
+#   3. 使用 ax.bar() 绘制分组柱子，颜色按序分配
+#   4. X轴标签旋转45度，添加图例和网格线
+#   5. 保存 PNG 至 STEP_OUT
+# ═══════════════════════════════════════════════════════════════════════
 
 def _plot_genre_grouped_bars(
     stats: dict[str, dict[str, float]],
@@ -233,16 +327,76 @@ def _plot_genre_grouped_bars(
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  J1: 节假日 VS 非节假日 电影类型日均提及 (Bar)
+#  J1: 节假日 VS 非节假日 电影类型日均提及 (Grouped Bar)
 #  J1: Holiday vs Non-Holiday Genre Avg Daily Mentions
 # ═══════════════════════════════════════════════════════════════════════
-# 【图表类型】水平柱状图(条形图): 各类型日均提及次数, holiday vs non-holiday 对比
+# 【图表类型】
+#   分组柱状图：横轴=电影类型，纵轴=日均提及次数
+#   每个类型有两根柱子并排：节假日(Holiday) vs 非节假日(Non-holiday)
+#   柱宽自动根据分组数调整，颜色使用 COLOR_HOLIDAY/COLOR_NONHOLIDAY
+# 
 # 【统计口径】
-#   seeker_genres: [{user_id, date, period, genre, ...}] 列表
-#   _avg_daily_genre(seeker_genres, date_set) → {genre: avg_daily_mentions}
-#   取 TOP_N_GENRES(15) 个最常见类型
-# 【输出文件】PNG: j1_j2_holiday_genre_merged.png, CSV: j1_*.csv
-# 【特殊说明】类型按提及频率排序，显示在 Y 轴（水平条形图）
+#   指标说明:
+#     - "日均提及次数" = 该类型在指定日期集合中的总提及次数 / 天数
+#     - 注意: 每条记录中每种类型只计一次（_genre_mention_counts 中使用 Counter）
+#     - 只显示 TOP_N_GENRES(20) 个最常见的类型
+#   分组方式:
+#     - holiday: r['period'] == 'holiday' 的日期集合
+#     - non_holiday: r['period'] != 'holiday' 的日期集合（工作日+周末）
+#   数据来源:
+#     - seeker_genres 由 _build_seeker_genres() 构建
+#     - 电影类型通过匹配同一会话（conv_id 前缀）中系统回复的电影 ID 提取
+# 
+# 【坐标轴】
+#   X轴: 电影类型名称（按总提及数降序排列，旋转45度显示，字号9）
+#   Y轴: 日均提及次数（网格线 alpha=0.3）
+#   图例: 右上角，字号9
+# 
+# 【输出文件】
+#   PNG: j1_holiday_vs_nonholiday_genre.png（通过 _plot_genre_grouped_bars 绘制）
+#   CSV: j1_holiday_vs_nonholiday_genre.csv（含: genre, holiday_avg_daily, non_holiday_avg_daily）
+# 
+# 【特殊说明】
+#   - 柱状图通过辅助函数 _plot_genre_grouped_bars() 统一绘制
+#   - 该函数可复用给 J2（三组对比），通过参数 stats dict 区分
+#   - 类型排序逻辑: 按所有分组的总提及数降序取前 TOP_N_GENRES 个
+#   - 柱子偏移: offset = (i - (len(groups)-1)/2) * width 实现并排
+#   - 注意: 这里的"日均"是总提及数/天数，而非 A1 的"每天提问数的均值"
+# 
+# 【代码中处理逻辑】
+#   1. 日期收集阶段
+#      遍历 seeker_genres, 根据 r['period'] 收集日期：
+#        holiday_dates ← r['period'] == 'holiday' 的 r['date'] 集合（set 去重）
+#        non_holiday_dates ← r['period'] != 'holiday' 的 r['date'] 集合
+#      天数上限保护: num_h = max(len(dates), 1) 避免除零
+# 
+#   2. 提及次数统计 (_genre_mention_counts)
+#      输入: seeker_genres（增强后的提问记录列表）+ date_set（目标日期集合）
+#      数据结构: Counter（字典子类，自动处理不存在的键）
+#      处理流程:
+#       a) 遍历 seeker_genres 每条记录 r
+#       b) 如果 r['date'] not in date_set → 跳过
+#       c) 对 r['genres'] 集合中的每个类型 g，counter[g] += 1
+#      注意: 使用 set 存储类型，每条记录每种类型最多计1次
+#      返回: {genre: int} 类型-原始提及次数 字典
+# 
+#   3. 日均值计算
+#      h_avg[g] = h_genre[g] / num_holiday_dates
+#      nh_avg[g] = nh_genre[g] / num_non_holiday_dates
+#     注意: 分母是"天数"而非"记录数"，体现每天平均提及强度
+# 
+#   4. 图表渲染 (_plot_genre_grouped_bars)
+#      - 合并所有分组中的类型，按总提及数降序排序
+#      - 截取前 TOP_N_GENRES 个类型
+#      - 对每个分组 i, 计算偏移量并绘制 bar
+#      - X 轴刻度和标签通过 set_xticks/set_xticklabels 设置
+#      - 自动调整布局后保存 PNG
+#      - 返回 top_genres 列表供 CSV 输出使用分组排序
+# 
+#   5. CSV 输出
+#      表头: ['genre', 'holiday_avg_daily', 'non_holiday_avg_daily']
+#      排序: 按 holiday+non_holiday 日均值之和降序
+#      每行: 类型名, 节假日日均值, 非节假日日均值（format '.2f'）
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_j1_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
@@ -282,10 +436,58 @@ def dim_j1_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  J2: 节假日 VS 工作日 VS 周末 电影类型日均提及
-#  J2: Holiday vs Workday vs Weekend Genre
+#  J2: 节假日 VS 工作日 VS 周末 电影类型日均提及 (Grouped Bar)
+#  J2: Holiday vs Workday vs Weekend Genre Avg Daily Mentions
 # ═══════════════════════════════════════════════════════════════════════
-# 【输出文件】CSV: j2_holiday_workday_weekend_genre.csv (图片已合并到J1)
+# 【图表类型】
+#   分组柱状图：横轴=电影类型，纵轴=日均提及次数
+#   每个类型有三根柱子并排：Holiday(红) / Workday(黄) / Weekend(青)
+#   通过辅助函数 _plot_genre_grouped_bars() 绘制
+# 
+# 【统计口径】
+#   指标说明:
+#     - "日均提及次数" = 该类型在指定分组日期集合中的总提及次数 / 天数
+#     - 每种类型每条记录只计一次（Counter + set 去重）
+#     - 只显示 TOP_N_GENRES(20) 个最常见的类型
+#   分组方式:
+#     - holiday: r['period'] == 'holiday' 的日期集合
+#     - workday: r['period'] == 'workday' 的日期集合
+#     - weekend: r['period'] == 'weekend' 的日期集合
+#   数据来源:
+#     - 同 J1，seeker_genres 来自 _build_seeker_genres()
+# 
+# 【坐标轴】
+#   X轴: 类型名称（按总提及数降序，旋转45度）
+#   Y轴: 日均提及次数
+#   图例: 右上角，三种颜色对应三个分组
+# 
+# 【输出文件】
+#   PNG: j2_holiday_workday_weekend_genre.png（独立图片，未合并到 J1）
+#   CSV: j2_holiday_workday_weekend_genre.csv（含: genre, holiday, workday, weekend 日均值）
+# 
+# 【特殊说明】
+#   - 与 J1 使用相同的 _plot_genre_grouped_bars() 渲染，但传入3组数据
+#   - 使用 period_genre 字典存储每个分组的原始计数和日均值
+#   - CSV 排序逻辑: 所有类型按三组日均值之和降序排列
+#   - 注意: 这与 J1 使用独立 PNG 输出（J1 也曾试图合并但各自保留）
+# 
+# 【代码中处理逻辑】
+#   1. 数据分组与日均值计算
+#      遍历 ['holiday', 'workday', 'weekend']:
+#       a) p_dates = r['period'] == p 的日期集合
+#       b) raw = _genre_mention_counts(seeker_genres, p_dates) → {genre: int}
+#       c) avg = {genre: count / max(len(p_dates), 1)}
+#      period_avg 结构: {'Holiday': {g: avg, ...}, 'Workday': {...}, 'Weekend': {...}}
+# 
+#   2. 图表渲染
+#      与 J1 完全相同的 _plot_genre_grouped_bars 调用
+#      groups = ['Holiday', 'Workday', 'Weekend'] → 柱宽 = 0.8/3 ≈ 0.27
+#      颜色: [红, 黄, 青] 对应 COLOR_HOLIDAY / COLOR_WORKDAY / COLOR_WEEKEND
+# 
+#   3. CSV 输出
+#      表头: ['genre', 'holiday_avg_daily', 'workday_avg_daily', 'weekend_avg_daily']
+#      所有类型合并去重后按三组日均值之和降序排列
+#      每行: 类型名 + 三组日均值
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_j2_holiday_workday_weekend_genre(seeker_genres: list[dict]):
@@ -334,8 +536,70 @@ def dim_j2_holiday_workday_weekend_genre(seeker_genres: list[dict]):
 #  J3: 各节假日电影类型分布 VS 非节假日基线 (Heatmap)
 #  J3: Per-Holiday Genre Distribution vs Non-Holiday
 # ═══════════════════════════════════════════════════════════════════════
-# 【图表类型】热力图: 行=TOP_N 类型, 列=节假日, 值=日均提及次数差值 vs 非节假日基线
-# 【输出文件】PNG: j3_j4_per_holiday_genre_merged.png, CSV: j3_*.csv
+# 【图表类型】
+#   热力图（RdBu_r 配色）：行=节假日，列=电影类型，单元格值=日均提及次数差值
+#   正值（红色）= 节假日高出非节假日，负值（蓝色）= 节假日低于非节假日
+#   颜色刻度对称：vmax = max(|matrix.min()|, |matrix.max()|)
+# 
+# 【统计口径】
+#   指标说明:
+#     - 单元格值 = holiday_avg_daily - non_holiday_avg_daily
+#     - 非节假日基线: 所有 r['period'] != 'holiday' 的日期集合的日均提及次数
+#     - 节假日按名称（前6字符）分组，跨年聚合（如"春节"合并多年）
+#   数据过滤:
+#     - 节假日需满足 len(records) >= MIN_DATA_ROWS 才有足够数据量
+#     - 类型取全局 TOP_N_GENRES(20) 个
+# 
+# 【坐标轴】
+#   X轴: 电影类型名称（TOP_N_GENRES 个，按全局总提及数降序，旋转45度，字号8）
+#   Y轴: 节假日名称（按名称字母排序，字号8）
+#   颜色条: label='Avg Daily Mention Diff', shrink=0.6
+#   标题: 红=假日更多, 蓝=假日更少
+# 
+# 【输出文件】
+#   PNG: j3_per_holiday_vs_nonholiday_genre.png（独立热力图）
+#   CSV: j3_per_holiday_vs_nonholiday_genre.csv
+#         （含每个节假日×类型的日均值，最后一行为 non_holiday_baseline）
+# 
+# 【特殊说明】
+#   - 使用 ax.imshow() 绘制热力图（非 sns.heatmap），通过 _annotate_heatmap 显示数值
+#   - 矩阵值 = 节假日日均值 - 非节假日日均值，而非原始值
+#   - CSV 最后一行包含非节假日基线数据，便于比较
+#   - 与 step1 中 A3/A4 的柱状图+基线不同，此处用颜色直观展示偏离程度
+# 
+# 【代码中处理逻辑】
+#   1. 非节假日基线计算
+#      non_holiday_dates = 所有非节假日的日期集合
+#      nh_genre = _genre_mention_counts(seeker_genres, non_holiday_dates)
+#      nh_avg[g] = nh_genre[g] / num_nh_dates → 非节假日日均提及基线
+# 
+#   2. 节假日分组聚合
+#      遍历 seeker_genres, 对 r['period']=='holiday' 的行:
+#       - name = r['holiday_name'][:6] 取前6字符作为分组键
+#       - defaultdict(list) → holiday_groups[name].append(r)
+#      过滤: 去除 len(values) < MIN_DATA_ROWS 的分组
+#      排序: names = sorted(holiday_groups.keys()) 按名称字母序
+# 
+#   3. 全局类型排序
+#      Counter 累加所有类型提及次数
+#      取 most_common(TOP_N_GENRES) 作为矩阵的列标签
+# 
+#   4. 矩阵构建
+#      matrix 维度: len(names) × len(top_genres)
+#      对每个节假日 i:
+#       - 取该节假日的日期集合 → group_dates
+#       - gc = _genre_mention_counts(records, group_dates)
+#       - 对每个类型 j: matrix[i,j] = gc[g]/num_dates - nh_avg[g]
+# 
+#   5. 热力图渲染
+#      imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
+#      _annotate_heatmap(ax, matrix, fmt='.1f', fs=6) 标注数值
+#      colorbar(label='Avg Daily Mention Diff') 颜色条
+# 
+#   6. CSV 输出
+#      表头: ['holiday_name', 'num_dates'] + top_genres + ['total_avg_daily']
+#      每节假日一行: 名称, 天数, 每个类型的日均值, 总日均值
+#      末行: non_holiday_baseline, 非节假日天数, 基线数据
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_j3_per_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
@@ -385,6 +649,7 @@ def dim_j3_per_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
     fig, ax = plt.subplots(figsize=(max(14, len(top_genres) * 0.55), max(6, len(names) * 0.4 + 2)))
     vmax = max(abs(matrix.min()), abs(matrix.max()), 0.01)
     im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
+    _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
 
     ax.set_xticks(range(len(top_genres)))
     ax.set_xticklabels(top_genres, rotation=45, ha='right', fontsize=8)
@@ -422,10 +687,67 @@ def dim_j3_per_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  J4: 各节假日 VS 工作日/周末 电影类型分布 (Heatmap)
+#  J4: 各节假日 VS 工作日/周末 电影类型分布 (Dual Heatmap)
 #  J4: Per-Holiday Genre vs Workday & Weekend
 # ═══════════════════════════════════════════════════════════════════════
-# 【输出文件】CSV: j4_per_holiday_vs_workday_weekend_genre.csv (图片已合并到 J3)
+# 【图表类型】
+#   双面板热力图（2行1列，RdBu_r 配色）
+#   - 上部分: 节假日日均提及 - 工作日基线（差值）
+#   - 下部分: 节假日日均提及 - 周末基线（差值）
+#   行=节假日，列=TOP_N_GENRES 个类型
+#   每张图有独立的颜色刻度（对称范围，vmax 各自计算）
+# 
+# 【统计口径】
+#   指标说明:
+#     - 上面板值 = holiday_avg_daily - workday_baseline
+#     - 下面板值 = holiday_avg_daily - weekend_baseline
+#     - 工作日基线: r['period'] == 'workday' 的日期集合的日均提及
+#     - 周末基线: r['period'] == 'weekend' 的日期集合的日均提及
+#   数据过滤:
+#     - 同 J3: 节假日按名称聚合，需满足 len(records) >= MIN_DATA_ROWS
+# 
+# 【坐标轴】
+#   X轴: 电影类型（TOP_N_GENRES 个，旋转45度，上字号7/下字号7）
+#   Y轴: 节假日名称（按字母序，字号7）
+#   每个子图有独立颜色条，label='Diff'
+#   标题分别标注 "Diff: Holiday - Workday Baseline" 和 "Diff: Holiday - Weekend Baseline"
+# 
+# 【输出文件】
+#   PNG: j4_per_holiday_vs_workday_weekend_genre.png（独立双面板热力图）
+#   CSV: j4_per_holiday_vs_workday_weekend_genre.csv（含节假日×类型日均值+基线数据）
+# 
+# 【特殊说明】
+#   - 两张热力图共享相同的节假日行顺序，便于左右对照
+#   - 与 J3 相比，此次使用工作日和周末两个独立基线而非一个非节假日基线
+#   - 两张图使用独立 vmax（各自的最大绝对值），适合颜色分布不同的场景
+# 
+# 【代码中处理逻辑】
+#   1. 基线计算
+#      workday_dates = r['period'] == 'workday' 的日期集合
+#      weekend_dates = r['period'] == 'weekend' 的日期集合
+#      wd_genre = _genre_mention_counts(seeker_genres, workday_dates)
+#      we_genre = _genre_mention_counts(seeker_genres, weekend_dates)
+#      wd_avg[g] = wd_genre[g] / max(len(workday_dates), 1)
+#      we_avg[g] = we_genre[g] / max(len(weekend_dates), 1)
+# 
+#   2. 节假日分组（同 J3）
+#      按 holiday_name[:6] 分组，过滤数据不足的组
+#      排序: names = sorted(holiday_groups.keys())
+# 
+#   3. 矩阵构建（两个独立矩阵）
+#      matrix_wd: 节假日日均 - 工作日基准（差值）
+#      matrix_we: 节假日日均 - 周末基准（差值）
+#      每个矩阵: len(names) × TOP_N_GENRES
+# 
+#   4. 双面板热力图渲染
+#      上子图 (ax1): imshow(matrix_wd, ...) + _annotate_heatmap
+#      下子图 (ax2): imshow(matrix_we, ...) + _annotate_heatmap
+#      各自设置 x/y 轴刻度和标签，颜色条
+#      总标题: 'Per-Holiday Genre Avg Daily Mentions: Diff from Workday & Weekend'
+# 
+#   5. CSV 输出
+#      表头: ['holiday_name', 'num_dates'] + ['{g}_avg_daily'] + ['workday_avg', 'weekend_avg']
+#      每节假日一行: 名称, 天数, 每个类型日均值, 工作日均值, 周末均值
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres: list[dict]):
@@ -483,6 +805,7 @@ def dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres: list[dict]):
 
     vmax1 = max(abs(matrix_wd.min()), abs(matrix_wd.max()), 0.01)
     im1 = ax1.imshow(matrix_wd, cmap='RdBu_r', aspect='auto', vmin=-vmax1, vmax=vmax1)
+    _annotate_heatmap(ax1, matrix_wd, fmt='.1f', fs=6)
     ax1.set_xticks(range(len(top_genres)))
     ax1.set_xticklabels(top_genres, rotation=45, ha='right', fontsize=7)
     ax1.set_yticks(range(len(names)))
@@ -492,6 +815,7 @@ def dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres: list[dict]):
 
     vmax2 = max(abs(matrix_we.min()), abs(matrix_we.max()), 0.01)
     im2 = ax2.imshow(matrix_we, cmap='RdBu_r', aspect='auto', vmin=-vmax2, vmax=vmax2)
+    _annotate_heatmap(ax2, matrix_we, fmt='.1f', fs=6)
     ax2.set_xticks(range(len(top_genres)))
     ax2.set_xticklabels(top_genres, rotation=45, ha='right', fontsize=7)
     ax2.set_yticks(range(len(names)))
@@ -526,10 +850,69 @@ def dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres: list[dict]):
 #  J5: 节假日 × 电影类型 热力图 (Heatmap)
 #  J5: Per-Holiday Genre Mention Heatmap
 # ═══════════════════════════════════════════════════════════════════════
-# 【图表类型】热力图: X轴=节假日, Y轴=类型, 值=日均提及次数
-# 【统计口径】双向排序: X/Y轴均按总提及数降序排列
-# 【输出文件】PNG: j5_per_holiday_genre_heatmap.png, CSV: j5_*.csv
-# 【特殊说明】展示节假日间类型提及的绝对量差异，非差值
+# 【图表类型】
+#   热力图（sns.heatmap，YlOrRd 配色）：行=电影类型，列=节假日，值=日均提及次数
+#   与 J3/J4 不同，此处展示绝对量而非差值
+#   Y轴（类型）和 X轴（节假日）均按总日均提及数降序排列
+# 
+# 【统计口径】
+#   指标说明:
+#     - 单元格值 = 该节假日内该类型的日均提及次数（总提及数/天数）
+#     - 每条记录每种类型只计一次（set 去重）
+#   数据过滤:
+#     - 节假日按名称（前6字符）聚合，需满足 len(records) >= MIN_DATA_ROWS
+#     - 类型取全局 TOP_N_GENRES(20) 个
+# 
+# 【坐标轴】
+#   X轴: 节假日名称（按所有类型总日均提及数降序，旋转30度，ha='right'）
+#   Y轴: 电影类型名称（按所有节假日总日均提及数降序，不旋转）
+#   颜色条: label='Avg Daily Mentions'
+# 
+# 【输出文件】
+#   PNG: j5_per_holiday_genre_heatmap.png（DPI=150, bbox_inches='tight'）
+#   CSV: j5_per_holiday_genre_heatmap.csv（透视表格式，类型为行、节假日为列）
+# 
+# 【特殊说明】
+#   - 使用 pandas pivot_table 构建矩阵（aggfunc='sum', fill_value=0）
+#   - 双向排序: pivot.loc[pivot.sum(axis=1).sort_values(ascending=False).index]
+#   - 使用 sns.heatmap 而非 imshow，自带 annot=True 显示数值
+#   - 透明度: linewidths=0.5 网格线，便于区分单元格
+#   - 与 J3/J4 核心区别：展示绝对值，可直观看出哪个节假日哪种类型被讨论最多
+# 
+# 【代码中处理逻辑】
+#   1. 节假日分组
+#      按 holiday_name[:6] 分组（同 J3/J4）
+#      过滤数据不足的分组
+# 
+#   2. 热点类型确定
+#      Counter 统计全量 seeker_genres 中各类型提及次数
+#      取 most_common(TOP_N_GENRES) 作为矩阵行标签
+# 
+#   3. 数据行构建
+#      对每个节假日 × 每个类型:
+#        计算该节假日内该类型的日均提及次数
+#      每条数据: {genre, holiday, count}
+#      存入列表 data_rows
+# 
+#   4. 透视表构建
+#      df = pd.DataFrame(data_rows)
+#      pivot = df.pivot_table(index='genre', columns='holiday',
+#                             values='count', aggfunc='sum', fill_value=0)
+# 
+#   5. 双向排序
+#      Y轴降序: pivot = pivot.loc[pivot.sum(axis=1).sort_values(ascending=False).index]
+#      X轴降序: pivot = pivot[pivot.sum(axis=0).sort_values(ascending=False).index]
+#      使得最热门的类型和节假日排在最前面
+# 
+#   6. 热力图渲染
+#      sns.heatmap(pivot, annot=True, fmt='.1f', cmap='YlOrRd',
+#                  linewidths=0.5, cbar_kws={'label': 'Avg Daily Mentions'})
+#      annot=True 自动在每个单元格显示数值
+#      DPI=150 高质量输出
+# 
+#   7. CSV 输出
+#      直接使用 pivot.to_csv() 保存透视表
+#      编码: utf-8-sig，float_format='%.2f'
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_j5_per_holiday_genre_heatmap(seeker_genres: list[dict]):
@@ -630,6 +1013,36 @@ def dim_j5_per_holiday_genre_heatmap(seeker_genres: list[dict]):
 #  B: Hourly genre analysis  B：逐小时类型分析
 # ═══════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════
+#  Helper: Multi-Panel Hourly Genre Line Chart
+#  辅助函数：逐小时电影类型提及多面板折线图
+# ═══════════════════════════════════════════════════════════════════════
+# 【功能】为每个热门类型绘制一个子图，每个子图显示多组归一化折线
+#   用于 K1（2组: Holiday/Non-holiday）和 K2（3组: Holiday/Workday/Weekend）
+#   纵轴统一归一化为百分比（消除绝对量差异，聚焦时间分布模式）
+#
+# 【参数】
+#   hourly_genre: {'group_label': {genre: [24 floats]}, ...}
+#     其中 24 floats 为 0-23 小时日均提及次数
+#   title:   图表总标题
+#   filename: 输出 PNG 文件名
+#   top_n:   显示前 N 个热门类型子图（默认 6）
+#
+# 【返回值】无
+#
+# 【渲染流程】
+#   1. 合并所有分组所有类型，计算总提及数，排序取前 top_n 个
+#   2. subplots(top_n, 1, sharex=True, figsize=(12, 2.5*top_n+1))
+#   3. 对每个类型子图:
+#     a) 遍历每个分组, 取该分组该类型的 [24] 原始值
+#     b) 计算总和, 归一化为百分比: vals_pct = [v/total*100]
+#     c) ax.plot(hours, vals_pct, 'o-', label=group)
+#     d) 设置 ylabel=类型名(%/hr), 图例右上角
+#   4. 底部子图: set_xlabel('Hour of Day (UTC)')
+#   5. fig.tight_layout() → 保存 PNG
+#   6. 注意: 如果 top_n==1, axes 需包装为列表处理
+# ═══════════════════════════════════════════════════════════════════════
+
 def _plot_genre_hourly_lines(
     hourly_genre: dict[str, dict[str, list[float]]],
     title: str, filename: str,
@@ -687,16 +1100,76 @@ def _plot_genre_hourly_lines(
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  K1: 逐小时类型提及分布: 节假日 VS 非节假日 (Line)
+#  K1: 逐小时类型提及分布: 节假日 VS 非节假日 (Multi-Line)
 #  K1: Hourly Genre: Holiday vs Non-Holiday
 # ═══════════════════════════════════════════════════════════════════════
-# 【图表类型】多面板折线图: 每个热门类型一个子图, 2组曲线(holiday/non-holiday)
-#   归一化为百分比显示
+# 【图表类型】
+#   多面板折线图（垂直排列）：每个热门类型一个子图，2组曲线
+#   - 红色曲线: 节假日 (Holiday)
+#   - 蓝色曲线: 非节假日 (Non-holiday)
+#   纵轴归一化为百分比（每小时值占该类型全天总值的百分比）
+#   子图数量 = min(top_n=6, 实际热门类型数)
+# 
 # 【统计口径】
-#   _genre_hourly_mention_counts(seeker_genres, date_set) → {genre: [24 counts]}
-#   各类型逐小时提及数次数的原始值
-#   归一化: 每小时值 / 该类型全天总提及数 × 100（百分比）
-# 【输出文件】PNG: k1_hourly_holiday_vs_nonholiday_genre.png, CSV: k1_*.csv
+#   指标说明:
+#     - 原始值: _genre_hourly_mention_counts() 返回 {genre: [24 floats]}
+#     - 每个 float = 该小时在该组的总提及数 / 天数（日均每小时提及数）
+#     - 归一化: 每小时百分比 = 该小时值 / 24小时总和 × 100
+#     - 归一化目的：消除不同分组间绝对量的差异，聚焦"时间分布模式"差异
+#   分组:
+#     - holiday: r['period'] == 'holiday' 的日期集合
+#     - non_holiday: r['period'] != 'holiday' 的日期集合
+# 
+# 【坐标轴】
+#   X轴: 小时 (0-23, UTC)，所有子图共享
+#   Y轴: 每小时提及百分比 (%/hr)，每个子图独立
+#   图例: 右上角，区分 Holiday / Non-holiday
+#   线型: 'o-'（实线+圆形标记），alpha=0.85
+# 
+# 【输出文件】
+#   PNG: k1_hourly_holiday_vs_nonholiday_genre.png（多面板折线图）
+#   CSV: k1_hourly_holiday_vs_nonholiday_genre.csv（24行×所有类型原始值）
+# 
+# 【特殊说明】
+#   - 使用 _plot_genre_hourly_lines() 辅助函数统一绘制
+#   - 子图数量自动适应: 如果 top_n=1，将 axes 包装为列表处理
+#   - 热门类型取各分组总提及数之和最大的 TOP_N(6) 个
+#   - 归一化使用百分比而非原始值，可直观比较时间分布模式
+# 
+# 【代码中处理逻辑】
+#   1. 日期收集
+#      holiday_dates = r['period'] == 'holiday' 的日期 set
+#      non_holiday_dates = r['period'] != 'holiday' 的日期 set
+# 
+#   2. 逐小时类型计数 (_genre_hourly_mention_counts)
+#      数据结构: dh_genre_counter = defaultdict(lambda: defaultdict(int))
+#       键路径: date → (hour, genre) → count
+#      处理流程:
+#       a) 遍历 seeker_genres: 如果 r['date'] in date_set
+#       b) dh_genre_counter[r['date']][(h, g)] += 1
+#      聚合:
+#       hour_genre_total = defaultdict(lambda: [0]*24)
+#      遍历 date_set 中每个日期 d:
+#       对 d 下每个 (h, g) 组合: hour_genre_total[g][h] += count
+#      日均值: result[g][h] = hour_genre_total[g][h] / len(date_set)
+#      返回: {genre: [24 floats]}
+# 
+#   3. 热门类型排序 (_plot_genre_hourly_lines)
+#      合并所有分组所有类型，计算总提及数
+#      取前 top_n=6 个类型绘制子图
+# 
+#   4. 折线图渲染 (_plot_genre_hourly_lines)
+#      subplots(n, 1, sharex=True) 垂直排列子图
+#      每个子图:
+#       - 遍历 groups, 获取该组该类型的 [24] 数据
+#       - 计算 total = sum(vals), 如果 >0 则归一化
+#       - plot(hours, vals_pct, 'o-', label=group)
+#       - 设置 ylabel=g[:20] + '(%/hr)', 图例右上角
+#      底部的子图: set_xlabel('Hour of Day (UTC)')
+# 
+#   5. CSV 输出
+#      扁平格式: 24行, 每行=[hour, holiday_g1, holiday_g2, ..., non_holiday_g1, ...]
+#      值格式: '.4f'
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_k1_hourly_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
@@ -734,11 +1207,56 @@ def dim_k1_hourly_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  K2: 逐小时类型提及分布: 节假日 VS 工作日 VS 周末
+#  K2: 逐小时类型提及分布: 节假日 VS 工作日 VS 周末 (Multi-Line)
 #  K2: Hourly Genre: Holiday vs Workday vs Weekend
 # ═══════════════════════════════════════════════════════════════════════
-# 【输出文件】PNG: k2_hourly_holiday_workday_weekend_genre.png, CSV: k2_*.csv
-#   独立图片（非合并到 K1）
+# 【图表类型】
+#   多面板折线图（垂直排列）：每个热门类型一个子图，3组曲线
+#   - 红色: 节假日 (Holiday)
+#   - 黄色: 工作日 (Workday)
+#   - 青色: 周末 (Weekend)
+#   纵轴归一化为百分比，子图数量 = min(6, 实际热门类型数)
+#   与 K1 使用相同的辅助函数 _plot_genre_hourly_lines()，数据改为3组
+# 
+# 【统计口径】
+#   指标说明:
+#     - 原始值: _genre_hourly_mention_counts() 返回 {genre: [24 floats]}
+#     - 归一化百分比 = 每小时值 / 24小时总和 × 100
+#     - 每个子图显示一种类型的3条曲线对比
+#   分组:
+#     - holiday: r['period'] == 'holiday' 日期，红
+#     - workday: r['period'] == 'workday' 日期，黄
+#     - weekend: r['period'] == 'weekend' 日期，青
+# 
+# 【坐标轴】
+#   X轴: 小时 (0-23, UTC)，所有子图共享
+#   Y轴: 每小时提及百分比 (%/hr)
+#   图例: 右上角，3种曲线对应 Holiday/Workday/Weekend
+# 
+# 【输出文件】
+#   PNG: k2_hourly_holiday_workday_weekend_genre.png（独立多面板折线图）
+#   CSV: k2_hourly_holiday_workday_weekend_genre.csv（24行×所有类型×3组原始值）
+# 
+# 【特殊说明】
+#   - 与 K1 输出独立的 PNG（非合并）
+#   - 所有逻辑与 K1 相同，仅分组从2组变为3组
+#   - top_n 同样为6个热门类型
+# 
+# 【代码中处理逻辑】
+#   1. 三组逐小时数据计算
+#      对 ['holiday', 'workday', 'weekend'] 分别:
+#       - p_dates = r['period'] == p 的日期 set
+#       - hourly_data[p.capitalize()] = _genre_hourly_mention_counts(seeker_genres, p_dates)
+# 
+#   2. 图表渲染
+#      与 K1 完全相同的 _plot_genre_hourly_lines() 调用
+#      输入: {Holiday: {...}, Workday: {...}, Weekend: {...}}
+#      top_n=6 → 最多6个子图
+#      每个子图绘制3条归一化曲线
+# 
+#   3. CSV 输出
+#      表头: [hour, holiday_g1, ..., workday_g1, ..., weekend_g1, ...]
+#      24行，每行该小时下所有分组×所有类型的原始值（非百分比）
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_k2_hourly_holiday_workday_weekend_genre(seeker_genres: list[dict]):
@@ -784,9 +1302,65 @@ def dim_k2_hourly_holiday_workday_weekend_genre(seeker_genres: list[dict]):
 #  K3: 各节假日逐小时类型差值 (Heatmap per Genre)
 #  K3: Per-Holiday Hourly Genre Diff from Non-Holiday
 # ═══════════════════════════════════════════════════════════════════════
-# 【图表类型】每种类型一张热力图: 行=节假日, 列=0-23小时, 值=差值
-# 【输出文件】PNG: k3_genre_{g}_hourly_heatmap.png (每种类型一张), CSV: k3_*.csv
-# 【特殊说明】每个热门类型独立保存 PNG
+# 【图表类型】
+#   每个热门类型生成一张独立热力图（RdBu_r 配色）
+#   行=节假日，列=0-23小时，单元格值=该节假日该小时 vs 非节假日基线的日均提及差值
+#   正值（红色）= 节假日高于非节假日，负值（蓝色）= 节假日低于非节假日
+#   每个类型独立保存一个 PNG 文件
+# 
+# 【统计口径】
+#   指标说明:
+#     - 单元格值 = h_hourly[g][h] - nh_hourly[g][h]
+#     - h_hourly: 节假日每小时日均提及数（_genre_hourly_mention_counts）
+#     - nh_hourly: 非节假日每小时日均提及数（同函数计算基线）
+#     - 单元格值 > 0: 该节假日该小时该类型被讨论得比平时多
+#     - 单元格值 < 0: 该节假日该小时该类型被讨论得比平时少
+#   数据过滤:
+#     - 节假日按名称聚合，需满足 len(records) >= MIN_DATA_ROWS
+#     - 只对 TOP_N_GENRES(20) 个热门类型生成热力图
+# 
+# 【坐标轴】
+#   X轴: 小时 (0-23 UTC)，标签字号8
+#   Y轴: 节假日名称，标签字号8
+#   颜色条: label='Diff (avg/hr)', shrink=0.6
+#   标题: Genre "{g}": Per-Holiday Hourly Diff from Non-Holiday
+# 
+# 【输出文件】
+#   PNG: k3_genre_{g[:10]}_hourly_heatmap.png（每个热门类型一张）
+#   CSV: k3_per_holiday_hourly_genre.csv（长格式: holiday, genre, hour, diff）
+# 
+# 【特殊说明】
+#   - 每种类型独立图片，文件名用类型前10字符
+#   - 颜色刻度对称: vmax = max(|matrix.min()|, |matrix.max()|)
+#   - 使用 ax.imshow() 绘制 + _annotate_heatmap() 标注数值
+#   - 与 K4 的区别: K3 使用非节假日基线，K4 分别使用工作日/周末基线
+# 
+# 【代码中处理逻辑】
+#   1. 非节假日小时级基线
+#      non_holiday_dates = r['period'] != 'holiday' 的日期 set
+#      nh_hourly = _genre_hourly_mention_counts(seeker_genres, non_holiday_dates)
+#      返回: {genre: [24 floats]} 每个类型每小时日均提及数
+# 
+#   2. 节假日分组（同 J3）
+#      按 holiday_name[:6] 分组，过滤数据不足的组
+# 
+#   3. 全局类型排序
+#      Counter 统计全量类型，取 TOP_N_GENRES 个
+# 
+#   4. 逐类型热力图生成（循环 top_genres）
+#      对每个类型 g:
+#      a) 创建 matrix: len(names) × 24，初始化为0
+#      b) 对每个节假日 i:
+#         - 计算该节假日的逐小时数据 h_hourly
+#         - 对每小时 h: matrix[i,h] = h_hourly[g][h] - nh_hourly[g][h]
+#      c) imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
+#      d) _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
+#      e) 保存为 k3_genre_{g[:10]}_hourly_heatmap.png
+# 
+#   5. CSV 输出（长格式，所有类型合并）
+#      表头: ['holiday_name', 'genre', 'hour', 'diff_from_nonholiday']
+#      每节假日 × 每类型 × 每小时 一条记录
+#      适合后续导入 pandas 做进一步分析
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_k3_per_holiday_hourly_genre(seeker_genres: list[dict]):
@@ -832,6 +1406,7 @@ def dim_k3_per_holiday_hourly_genre(seeker_genres: list[dict]):
         fig, ax = plt.subplots(figsize=(16, max(4, len(names) * 0.3 + 2)))  # 创建图表
         vmax = max(abs(matrix.min()), abs(matrix.max()), 0.01)  # 对称颜色范围的最大绝对值
         im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)  # 绘制热力图，红蓝配色
+        _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
 
         ax.set_xticks(range(24))  # x 轴刻度 0-23
         ax.set_xticklabels(range(24), fontsize=8)  # x 轴标签
@@ -867,8 +1442,76 @@ def dim_k3_per_holiday_hourly_genre(seeker_genres: list[dict]):
 #  K4: 各节假日逐小时类型 VS 工作日/周末 (Heatmap)
 #  K4: Per-Holiday Hourly Genre vs Workday & Weekend
 # ═══════════════════════════════════════════════════════════════════════
-# 【图表类型】每种类型双热力图: vs 工作日差值 + vs 周末差值
-# 【输出文件】CSV: k4_per_holiday_hourly_genre_vs_workday_weekend.csv
+#  K4: 各节假日逐小时类型 VS 工作日/周末 (Dual Heatmap per Genre)
+#  K4: Per-Holiday Hourly Genre vs Workday & Weekend
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   每个热门类型生成一张双面板热力图（2行1列，RdBu_r 配色）
+#   - 上面板: 节假日逐小时日均 - 工作日基线（差值）
+#   - 下面板: 节假日逐小时日均 - 周末基线（差值）
+#   行=节假日，列=0-23小时
+#   每张图有独立颜色刻度（对称范围）
+# 
+# 【统计口径】
+#   指标说明:
+#     - 上面板值 = holiday_hourly_avg - workday_hourly_baseline
+#     - 下面板值 = holiday_hourly_avg - weekend_hourly_baseline
+#     - 工作日基线: r['period'] == 'workday' 的日期集合的逐小时日均值
+#     - 周末基线: r['period'] == 'weekend' 的日期集合的逐小时日均值
+#   数据过滤:
+#     - 节假日按名称聚合，需满足 len(records) >= MIN_DATA_ROWS
+#     - 只对前 6 个热门类型生成热力图（TOP_N_GENRES=6，缩窄范围便于阅读）
+# 
+# 【坐标轴】
+#   X轴: 小时 (0-23 UTC)，标签字号7
+#   Y轴: 节假日名称，标签字号7
+#   每个子图独立颜色条，label='Diff'
+#   标题分别标注 Diff: Holiday - Workday/Weekend Baseline
+# 
+# 【输出文件】
+#   PNG: k4_genre_{safe_g[:10]}_hourly_heatmap.png（每个热门类型一张双面板图）
+#   CSV: k4_per_holiday_hourly_genre_vs_workday_weekend.csv
+#        （长格式: holiday, genre, hour, holiday_avg, workday_avg, weekend_avg）
+# 
+# 【特殊说明】
+#   - 与 K3 的核心区别: K3 使用非节假日基线，K4 分别使用工作日/周末基线
+#   - 与 K3 的另一个区别: 只取前6个类型（非 TOP_N_GENRES=20），避免图片太多
+#   - 文件名中类型名做安全处理: 空格→下划线，斜杠→下划线
+#   - 每个类型独立双面板 PNG，便于观察各类型在不同基线下节假日效应
+# 
+# 【代码中处理逻辑】
+#   1. 工作/周末小时级基线
+#      workday_dates = r['period']=='workday' 的日期 set
+#      weekend_dates = r['period']=='weekend' 的日期 set
+#      wd_hourly = _genre_hourly_mention_counts(seeker_genres, workday_dates)
+#      we_hourly = _genre_hourly_mention_counts(seeker_genres, weekend_dates)
+# 
+#   2. 节假日分组（同 J3/J4）
+#      按 holiday_name[:6] 分组，过滤
+# 
+#   3. 类型选取（影响每个类型一张图的数量）
+#      Counter 统计全量类型，取前6个（非TOP_N_GENRES=20）
+#      因为每张图是双面板 PNG，6 张图已经足够代表性
+# 
+#   4. 逐类型双面板热力图（循环 top_genres[:6]）
+#      对每个类型 g:
+#      a) 创建 matrix_wd / matrix_we: len(names) × 24
+#      b) 对每个节假日 i:
+#         - 计算该节假日的逐小时数据 h_hourly
+#         - 对每小时 h:
+#           matrix_wd[i,h] = h_hourly[g][h] - wd_hourly[g][h]
+#           matrix_we[i,h] = h_hourly[g][h] - we_hourly[g][h]
+#      c) subplots(2, 1) 创建双面板
+#      d) 上面板: imshow(matrix_wd) + _annotate_heatmap
+#      e) 下面板: imshow(matrix_we) + _annotate_heatmap
+#      f) 各自设置 x/y 轴刻度和颜色条
+#      g) safe_g = g.replace(' ', '_').replace('/', '_')[:10]
+#      h) 保存为 k4_genre_{safe_g}_hourly_heatmap.png
+# 
+#   5. CSV 输出（长格式）
+#      表头: ['holiday_name', 'genre', 'hour', 'holiday_avg', 'workday_avg', 'weekend_avg']
+#      每节假日 × 每类型 × 每小时 一条记录
+#      包含节假日原始值的绝对值（holiday_avg），方便同时对比绝对值和差值
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_k4_per_holiday_hourly_genre_vs_workday_weekend(
@@ -923,6 +1566,7 @@ def dim_k4_per_holiday_hourly_genre_vs_workday_weekend(
 
         vmax1 = max(abs(matrix_wd.min()), abs(matrix_wd.max()), 0.01)
         im1 = ax1.imshow(matrix_wd, cmap='RdBu_r', aspect='auto', vmin=-vmax1, vmax=vmax1)
+        _annotate_heatmap(ax1, matrix_wd, fmt='.1f', fs=6)
         ax1.set_xticks(range(24))
         ax1.set_xticklabels(range(24), fontsize=7)
         ax1.set_yticks(range(len(names)))
@@ -932,6 +1576,7 @@ def dim_k4_per_holiday_hourly_genre_vs_workday_weekend(
 
         vmax2 = max(abs(matrix_we.min()), abs(matrix_we.max()), 0.01)
         im2 = ax2.imshow(matrix_we, cmap='RdBu_r', aspect='auto', vmin=-vmax2, vmax=vmax2)
+        _annotate_heatmap(ax2, matrix_we, fmt='.1f', fs=6)
         ax2.set_xticks(range(24))
         ax2.set_xticklabels(range(24), fontsize=7)
         ax2.set_yticks(range(len(names)))

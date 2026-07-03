@@ -46,6 +46,17 @@ STEP_OUT = STEP_DIRS[2]                   # 步骤2输出目录：output/movie/s
 os.makedirs(STEP_OUT, exist_ok=True)      # 确保输出目录存在
 
 
+def _annotate_heatmap(ax, data, fmt='.1f', fs=6):
+    """在imshow热力图上标注数值"""
+    arr = data.data if isinstance(data, np.ma.MaskedArray) else np.asarray(data)
+    for i in range(arr.shape[0]):
+        for j in range(arr.shape[1]):
+            v = arr[i, j]
+            if not np.isnan(v) and abs(v) > 1e-6:
+                ax.text(j, i, format(float(v), fmt), ha='center', va='center',
+                        fontsize=fs, color='black')
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Helper: unique active users per day
 #  辅助函数：每日独立活跃用户统计
@@ -560,6 +571,7 @@ def dim_d3_per_holiday_hourly_active_vs_nonholiday(seekers: list[dict]):
     fig, ax = plt.subplots(figsize=(16, max(6, len(group_names) * 0.4 + 2)))
     vmax = max(abs(matrix.min()), abs(matrix.max()), 0.01)
     im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
+    _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
 
     ax.set_xticks(range(24))
     ax.set_xticklabels(range(24), fontsize=8)
@@ -637,6 +649,7 @@ def dim_d4_per_holiday_hourly_active_vs_workday_weekend(seekers: list[dict]):
     # 上半图：vs 工作日
     vmax1 = max(abs(matrix_wd.min()), abs(matrix_wd.max()), 0.01)
     im1 = ax1.imshow(matrix_wd, cmap='RdBu_r', aspect='auto', vmin=-vmax1, vmax=vmax1)
+    _annotate_heatmap(ax1, matrix_wd, fmt='.1f', fs=6)
     ax1.set_xticks(range(24))
     ax1.set_xticklabels(range(24), fontsize=7)
     ax1.set_yticks(range(len(group_names)))
@@ -647,6 +660,7 @@ def dim_d4_per_holiday_hourly_active_vs_workday_weekend(seekers: list[dict]):
     # 下半图：vs 周末
     vmax2 = max(abs(matrix_we.min()), abs(matrix_we.max()), 0.01)
     im2 = ax2.imshow(matrix_we, cmap='RdBu_r', aspect='auto', vmin=-vmax2, vmax=vmax2)
+    _annotate_heatmap(ax2, matrix_we, fmt='.1f', fs=6)
     ax2.set_xticks(range(24))
     ax2.set_xticklabels(range(24), fontsize=7)
     ax2.set_yticks(range(len(group_names)))

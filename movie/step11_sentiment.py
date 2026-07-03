@@ -317,9 +317,15 @@ def _plot_heatmap(
 
     im = ax.imshow(matrix, aspect='auto', cmap=cmap,
                    **({} if center is None else {'vmin': -abs(matrix).max(),
-                                                  'vmax': abs(matrix).max()}))
-    # Use imshow directly for more control
-    # Actually let's just use sns-style via imshow
+                                                   'vmax': abs(matrix).max()}))
+    # 在热力图上标注数值
+    _mat = np.ma.getdata(matrix) if isinstance(matrix, np.ma.MaskedArray) else np.asarray(matrix)
+    for _i in range(_mat.shape[0]):
+        for _j in range(_mat.shape[1]):
+            _v = _mat[_i, _j]
+            if not np.isnan(_v) and abs(_v) > 1e-6:
+                ax.text(_j, _i, f'{_v:.1f}', ha='center', va='center',
+                        fontsize=5, color='black')
     ax.set_xticks(range(len(col_labels)))
     ax.set_xticklabels(col_labels, rotation=45, ha='right', fontsize=8)
     ax.set_yticks(range(len(row_labels)))
@@ -736,6 +742,16 @@ def dim_s4_genre_by_holiday(seekers: list[dict], movie_info: dict):
     masked = np.ma.masked_invalid(matrix)
     vmax = max(np.nanmax(np.abs(matrix)), 0.01)
     im = ax.imshow(masked, aspect='auto', cmap='RdBu_r', vmin=-vmax, vmax=vmax)
+    # 在热力图上标注数值
+    _mat = np.ma.getdata(masked) if isinstance(masked, np.ma.MaskedArray) else np.asarray(masked)
+    for _i in range(_mat.shape[0]):
+        for _j in range(_mat.shape[1]):
+            _v = _mat[_i, _j]
+            if not np.isnan(_v) and abs(_v) > 1e-6:
+                _mask = np.ma.is_masked(masked) and masked.mask[_i, _j]
+                if not _mask:
+                    ax.text(_j, _i, f'{_v:.2f}', ha='center', va='center',
+                            fontsize=5, color='black')
 
     ax.set_xticks(range(len(active_genres)))
     ax.set_xticklabels(active_genres, rotation=45, ha='right', fontsize=8)
