@@ -337,6 +337,49 @@ def dim_a1_holiday_vs_nonholiday_pie(seekers: list[dict]):
 #  A2: Holiday vs Workday vs Weekend Average Daily Questions
 # ═══════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════
+#  A2: 节假日 VS 工作日 VS 周末 平均提问次数 (Pie)
+#  A2: Holiday vs Workday vs Weekend Average Daily Questions
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   独立柱状图（1面板）：节假日(Holiday) vs 工作日(Workday) vs 周末(Weekend) 日均提问数对比
+#   注意：目前已合并到 A1 的右图，此处仅输出 CSV，不再生成独立图片
+# 
+# 【统计口径】
+#   指标说明:
+#     - "日均提问数" = 该组内各天的提问数列表取均值 (np.mean)
+#   分组方式:
+#     - holiday: 法定节假日日期（按 r['period'] == 'holiday' 筛选）
+#     - workday: 非节假日的周一至周五（按 r['period'] == 'workday' 筛选）
+#     - weekend: 非节假日的周六周日（按 r['period'] == 'weekend' 筛选）
+# 
+# 【坐标轴】
+#   X轴: 三个分组标签（Holiday, Workday, Weekend）
+#   Y轴: 日均提问数（整数刻度，MaxNLocator）
+# 
+# 【输出文件】
+#   CSV: a2_holiday_workday_weekend.csv (含: 分组名, 日均提问数, 天数)
+#   注意: 图片已合并到 A1，不再单独输出 PNG
+# 
+# 【特殊说明】
+#   - 此函数仅保留 CSV 输出，图表已合并到 dim_a1 的右子图
+#   - 代码路径与 dim_a1 基本一致，只是分组从2组变为3组
+# 
+# 【代码中处理逻辑】
+#   1. 数据分组阶段
+#      遍历 seekers, 根据 r['period'] 取值收集日期到三个 set:
+#        holiday_dates ← r['period'] == 'holiday'
+#        workday_dates ← r['period'] == 'workday'
+#        weekend_dates ← r['period'] == 'weekend'
+# 
+#   2. 日均值计算
+#       对每个 period_dates[p] 调用 _avg_daily_questions(seekers, date_set)
+#       该函数内部: Counter() 统计每天提问数 → np.mean(...) 求均值
+# 
+#   3. 输出 CSV
+#       写入 [group, avg_daily_questions, num_days] 三列
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_a2_holiday_workday_weekend_pie(seekers: list[dict]):
     """
     Merged into A1 bar chart (a1_holiday_vs_nonholiday_bar.png).
@@ -414,6 +457,63 @@ def _aggregate_holiday_names(seekers: list[dict]) -> list[dict]:
     log(f"Aggregated {len(result)} unique holiday names (first 6 chars)", "A3")
     return result
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  A3: 各个节假日 VS 非节假日 平均提问次数 (Grouped Bar)
+#  A3: Per-Holiday vs Non-Holiday Average Daily Questions
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   双面板柱状图（2行1列），纵向排列
+#   - 上部分: 各节假日柱状图 + 非节假日基线（红色虚线）
+#   - 下部分: 各节假日柱状图 + 工作日/周末基线（黄色/青色虚线）
+# 
+# 【统计口径】
+#   指标说明:
+#     - 节假日按名称（取前6个字符）跨年聚合，如 "春节" 合并多年数据
+#     - 日均提问数 = 组内每天提问数取均值
+#     - 非节假日基线 = 所有非节假日（workday+weekend）日期集合的日均值
+#     - 工作日/周末基线分别计算
+#   数据过滤:
+#     - 节假日数据天数 < MIN_DATA_ROWS//5 时跳过（数据太少不可靠）
+# 
+# 【坐标轴】
+#   X轴: 各节假日名称（旋转45度显示）
+#   Y轴: 日均提问数
+#   辅助线: 非节假日/工作日/周末基线作为水平虚线
+# 
+# 【输出文件】
+#   PNG: a3_a4_per_holiday_merged.png（合并输出）
+#   CSV: a3_per_holiday_vs_nonholiday.csv（A3数据）
+#   CSV: a4_per_holiday_vs_workday_weekend.csv（A4数据）
+# 
+# 【特殊说明】
+#   - A3 和 A4 已合并到一个双面板图中输出
+#   - _aggregate_holiday_names() 辅助函数完成节假日名称聚合
+#   - 基线条用 axhline() 绘制
+# 
+# 【代码中处理逻辑】
+#   1. 节假日聚合阶段 (_aggregate_holiday_names)
+#      数据结构: defaultdict(lambda: {'name','total_questions','dates':set,'daily_counts':defaultdict(int)})
+#      遍历 seekers, 对 r['period']=='holiday' 的行:
+#       - name = r['holiday_name'][:6] 取前6字符
+#       - 累加 total_questions, 添加日期到 dates set, 递增 daily_counts[date]
+#      筛选: 去除 dates 数量 < MIN_DATA_ROWS//5 的节假日
+#      排序: 按 total_questions 降序排列
+# 
+#   2. 基线计算
+#      non_holiday_dates = 所有 r['period']!='holiday' 的日期 set
+#      nh_avg = _avg_daily_questions(seekers, non_holiday_dates)
+#      类似计算 wd_avg 和 we_avg
+# 
+#   3. 图表渲染
+#      ax1 (上): ax1.bar(x, h_avgs) + ax1.axhline(y=nh_avg)
+#      ax2 (下): ax2.bar(x, h_avgs) + ax2.axhline(y=wd_avg) + ax2.axhline(y=we_avg)
+#      柱顶标注: ax.text() 显示数值和天数 n
+# 
+#   4. CSV 输出
+#      A3: holiday_name, avg_daily_questions, num_dates, total_questions, non_holiday_baseline
+#      A4: 同上 + workday_baseline + weekend_baseline
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_a3_per_holiday_vs_nonholiday(seekers: list[dict]):
     """
@@ -515,6 +615,29 @@ def dim_a3_per_holiday_vs_nonholiday(seekers: list[dict]):
 #  A4: Per-Holiday vs Workday vs Weekend Average Daily Questions
 # ═══════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════
+#  A4: 各个节假日 VS 工作日 VS 周末 平均提问次数 (Grouped Bar)
+#  A4: Per-Holiday vs Workday vs Weekend Average Daily Questions
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   已合并到 A3 图的下半部分，此处仅输出 CSV
+# 
+# 【统计口径】
+#   节假日按名称聚合，计算日均提问数
+#   对比基线: 工作日日均 / 周末日均
+# 
+# 【输出文件】
+#   CSV: a4_per_holiday_vs_workday_weekend.csv
+# 
+# 【特殊说明】
+#   图片输出已在 dim_a3 中完成，本函数仅保留 CSV 输出以保证数据独立可用
+# 
+# 【代码中处理逻辑】
+#   1. 复用 _aggregate_holiday_names() 聚合节假日数据
+#   2. 计算 workday_dates / weekend_dates 的日均值
+#   3. CSV 写入每行: [holiday_name, avg, num_dates, total, wd_baseline, we_baseline]
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_a4_per_holiday_vs_workday_weekend(seekers: list[dict]):
     """
     Merged into A3 chart (a3_a4_per_holiday_merged.png — bottom subplot).
@@ -549,6 +672,64 @@ def dim_a4_per_holiday_vs_workday_weekend(seekers: list[dict]):
 # ═══════════════════════════════════════════════════════════════════════
 #  A5: 节假日 VS 非节假日 / VS 工作日周末 平均提问单词数分组 (Grouped Bar)
 #  A5: Holiday vs Non-Holiday / vs Workday-Weekend — Word Length
+# ═══════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════
+#  A5: 节假日 VS 非节假日 / VS 工作日周末 单词数分布 (Grouped Bar)
+#  A5: Holiday vs Non-Holiday / vs Workday-Weekend Word Length Distribution
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   双面板分组柱状图（1行2列）
+#   - 左图: Holiday vs Non-holiday 四组单词数分段日均提问数对比
+#   - 右图: Holiday vs Workday vs Weekend 四组单词数分段日均提问数对比
+# 
+# 【统计口径】
+#   指标说明:
+#     - 单词数: 对 proc_text 清洗后（去电影ID、去特殊字符）的英文单词数
+#     - 使用 _clean_word_count(text) 函数清洗和计数
+#     - 四个分组: WORD_LEN_BUCKETS = [(1,10), (11,30), (31,100), (101,inf)]
+#     - "日均提问数" = 每个分组桶的日均提问数
+#   分组方式:
+#     - 同 A1: holiday / non_holiday / workday / weekend
+# 
+# 【坐标轴】
+#   X轴: 四个单词数分组标签（1-10, 11-30, 31-100, 100+）
+#   Y轴: 日均提问数（每组桶中的日均值）
+# 
+# 【输出文件】
+#   PNG: a5_holiday_vs_nonholiday_length.png
+#   CSV: a5_holiday_vs_nonholiday_length.csv
+# 
+# 【特殊说明】
+#   - 单词数 = 0 的提问被跳过
+#   - 每个桶的配色方案: 红(#e41a1c) / 蓝(#377eb8) / 绿(#4daf4a) / 紫(#984ea3)
+#   - 柱顶标注数值（小字体 8pt/7pt）
+# 
+# 【代码中处理逻辑】
+#   1. 日期收集与 A1 完全相同: 四个 set
+# 
+#   2. 单词数分布计算 (_word_len_distribution)
+#      输入: seekers + date_set
+#      数据结构: daily_bucket_counts = defaultdict(lambda: [0,0,0,0])
+#       键=日期, 值=[c1_10, c11_30, c31_100, c100+] 四元素列表
+#      处理流程:
+#       a) 遍历 seekers, 仅处理 r['date'] in date_set 的行
+#       b) 调用 _clean_word_count(r.get('proc_text','')) 得到 wc
+#       c) 跳过 wc==0 的行
+#       d) 遍历 WORD_LEN_BUCKETS 找到所属桶, daily_bucket_counts[date][i] += 1
+#       e) 遍历所有日期, 累加每个桶的值, 最后除以 date_set 大小得到日均值
+#      返回: [avg_1_10, avg_11_30, avg_31_100, avg_100+]
+# 
+#   3. 辅助函数 _clean_word_count
+#      a) re.sub(r'tt\d+', ' ', text) — 移除电影ID "tt1234567"
+#      b) re.sub(r'[^a-zA-Z\s]', ' ', text) — 只保留字母和空格
+#      c) re.sub(r'\s+', ' ', cleaned).strip() — 合并多余空格
+#      d) len(cleaned.split()) — 按空格拆分计单词数
+# 
+#   4. 图表渲染
+#      左图: 2组 × 4桶 = 8根柱子, 错位排列 (width_2=0.35)
+#      右图: 3组 × 4桶 = 12根柱子, 错位排列 (width_3=0.25)
+#      柱顶标注 f'{v:.1f}' 小字体
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_a5_holiday_length(seekers: list[dict]):
@@ -653,6 +834,55 @@ def dim_a5_holiday_length(seekers: list[dict]):
 # ═══════════════════════════════════════════════════════════════════════
 #  A6: 各个节假日 VS 非节假日 / VS 工作日周末 单词数分布 (Grouped Bar)
 #  A6: Per-Holiday vs Non-Holiday / vs Workday-Weekend — Word Length
+# ═══════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════
+#  A6: 各个节假日 VS 非节假日 / VS 工作日周末 单词数分布 (Grouped Bar)
+#  A6: Per-Holiday vs Non-Holiday / vs Workday-Weekend Word Length
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   双面板分组柱状图（2行1列）
+#   - 上部分: 各节假日在四个单词数分段的日均提问数 + 非节假日基线（虚线）
+#   - 下部分: 各节假日在四个单词数分段的日均提问数 + 工作日/周末基线（点线）
+# 
+# 【统计口径】
+#   同 A5: 单词数分四个桶计算日均提问数
+#   节假日名称同 A3/A4 方式聚合: 取前6字符
+#   基线: 非节假日/工作日/周末分别计算四桶的日均值
+# 
+# 【坐标轴】
+#   X轴: 各节假日名称（旋转45度）
+#   Y轴: 日均提问数
+#   每个节假日显示4根柱子（4种颜色对应4个桶）
+# 
+# 【输出文件】
+#   PNG: a6_per_holiday_length.png
+#   CSV: a6_per_holiday_length.csv (含节假日+基线完整数据)
+# 
+# 【特殊说明】
+#   - 使用来自 matplotlib 的 Patch 和 Line2D 构建自定义图例
+#   - 基线用虚线(上部: --) 和点线(下部: : 和 -.) 区分
+#   - 柱宽 0.18，每节假日4根柱子紧密排列
+# 
+# 【代码中处理逻辑】
+#   1. 节假日聚合: 复用 _aggregate_holiday_names()
+#      对每个节假日, 调用 _word_len_distribution(seekers, h['dates'])
+#      得到 h_dists: list of [4-element dist] per holiday
+# 
+#   2. 基线计算
+#      non_holiday_dates / workday_dates / weekend_dates 分别计算四桶分布
+#      nh_dist/wd_dist/we_dist = _word_len_distribution(seekers, date_set)
+# 
+#   3. 图表渲染 (双面板)
+#      每面板: 对 i=0..3 四个桶循环, 每组4根柱子
+#        ax.bar(x + (i-1.5)*width, vals, width, label=WORD_LEN_LABELS[i], color=BUCKET_COLORS[i])
+#      基线: axhline(y=dist[i], color=BUCKET_COLORS[i], linestyle=...)
+#      图例: 用 Patch(颜色块) + Line2D(线) 组合显示
+# 
+#   4. CSV 输出
+#      每行: [holiday_name, num_dates, b_1_10, b_11_30, b_31_100, b_100+,
+#             nh_1_10, ..., wd_1_10, ..., we_1_10, ...]
+#      一行包含节假日自身 + 三种基线的完整四桶数据
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_a6_per_holiday_length(seekers: list[dict]):
@@ -845,8 +1075,50 @@ def _plot_hourly_comparison(
     log(f"Saved: {path}")
 
 
-# ── B1: 节假日 VS 非节假日 小时段 ─────────────────────────────────────
-#  B1: Hourly comparison: Holiday vs Non-holiday
+# ═══════════════════════════════════════════════════════════════════════
+#  B1: 节假日 VS 非节假日 / VS 工作日周末 小时段提问量 (折线图)
+#  B1: Hourly Question Count: Holiday vs Non-holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   双面板折线图（2行1列）
+#   - 上部分: Holiday vs Non-holiday 24小时段提问数曲线对比
+#   - 下部分: Holiday vs Workday vs Weekend 24小时段提问数曲线对比
+# 
+# 【统计口径】
+#   - 按小时段汇总: 对每行 r['proc_time'], 提取 HH 部分作为 hour_key
+#   - 分 holiday/non_holiday/workday/weekend 四组
+#   - 使用 _hourly_stats() 辅助函数计算各组 24 小时的均值
+#   - 跳过 proc_time 为空的行
+# 
+# 【坐标轴】
+#   X轴: 0-23 小时段
+#   Y轴: 平均提问数
+#   图例: 两组（holiday/非节假日 或 holiday/workday/weekend）
+# 
+# 【输出文件】
+#   PNG: b1_b2_hourly_holiday_merged.png（与 B2 合并输出）
+#   CSV: b1_hourly_holiday_vs_nonholiday.csv
+# 
+# 【特殊说明】
+#   - 已与 B2 合并到一个双面板图中，B1 在上、B2 在下
+#   - 24小时制: X周从0到23标记
+#   - 用不同的颜色和风格区分组别（实线/虚线/点线等）
+# 
+# 【代码中处理逻辑】
+#   1. 调用 _hourly_stats() 分别计算 hourly_non_holiday 和 hourly_holiday
+#      返回: list of 24 小时均值
+# 
+#   2. _hourly_stats(seekers, date_set, timerange=(0,24))
+#      内部: 遍历 date_set 中的各天，统计每个小时出现的次数
+#      → 求所有天数的逐小时均值
+# 
+#   3. 上面板: 两条曲线
+#      x = np.arange(24)
+#      ax1.plot(x, h_vals, 'o-', color='#e41a1c', label='Holiday')
+#      ax1.plot(x, nh_vals, 's--', color='#377eb8', label='Non-Holiday')
+# 
+#   4. CSV 输出: [hour, holiday_avg, non_holiday_avg]
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_b1_hourly_holiday_vs_nonholiday(seekers: list[dict]):
     """Merged two-panel figure: top = holiday vs non-holiday, bottom = holiday vs workday vs weekend.
@@ -922,8 +1194,22 @@ def dim_b1_hourly_holiday_vs_nonholiday(seekers: list[dict]):
     log(f"Saved: {csv_b2}")
 
 
-# ── B2: 节假日 VS 工作日 VS 周末 小时段 ──────────────────────────────
-#  B2: Hourly comparison: Holiday vs Workday vs Weekend
+# ═══════════════════════════════════════════════════════════════════════
+#  B2: 节假日 VS 工作日 VS 周末 小时段 (已合并到 B1)
+#  B2: Holiday vs Workday vs Weekend Hourly (merged into B1)
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   图表已合并到 B1 的下面板，此处仅输出 CSV
+# 
+# 【统计口径】
+#   同 B1: 24小时段，分 holiday/workday/weekend 三组
+# 
+# 【输出文件】
+#   CSV: b2_hourly_holiday_workday_weekend.csv
+# 
+# 【特殊说明】
+#   图片输出已在 dim_b1 中完成，本函数仅保留 CSV 输出
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_b2_hourly_holiday_workday_weekend(seekers: list[dict]):
     """Merged into B1 chart (b1_b2_hourly_merged.png — bottom subplot).
@@ -951,8 +1237,43 @@ def dim_b2_hourly_holiday_workday_weekend(seekers: list[dict]):
     log(f"Saved: {csv_path}")
 
 
-# ── B3: 各个节假日 VS 非节假日 小时段 (Heatmap) ──────────────────────
-#  B3: Per-Holiday hourly vs Non-Holiday (Heatmap with difference)
+# ═══════════════════════════════════════════════════════════════════════
+#  B3: 各个节假日 VS 非节假日 小时段 (Heatmap)
+#  B3: Per-Holiday Hourly Difference: Holiday minus Non-Holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   热力图（Heatmap）
+#   - 行: 各节假日名称
+#   - 列: 0-23 小时
+#   - 颜色值: 节假日小时均值 - 非节假日小时基线
+# 
+# 【统计口径】
+#   节假日聚合同 A3/A6: 取前6字符
+#   非节假日基线 = _hourly_avg(seekers, non_holiday_dates)
+#   每个节假日的 24 小时均值 = _hourly_avg(seekers, h_dates)
+#   差值 = h_avg[h] - nh_avg[h] (可能为负数)
+# 
+# 【坐标轴】
+#   X轴: 0-23 小时
+#   Y轴: 节假日名称
+#   颜色条: 差值（symlog 处理宽动态范围，红色=正/蓝=负）
+# 
+# 【输出文件】
+#   PNG: b3_b4_per_holiday_hourly_merged.png（B3 在上面板，B4 在下面板）
+#   CSV: b3_per_holiday_hourly_vs_nonholiday.csv
+# 
+# 【特殊说明】
+#   - 已与 B4 合并输出到一个双面板图中
+#   - 使用 sns.heatmap 渲染
+#   - symlog 映射处理正负值和宽范围的差异
+# 
+# 【代码中处理逻辑】
+#   1. 聚合节假日数据 (_aggregate_holiday_names → _hourly_avg 计算)
+#   2. 非节假日基线计算
+#   3. DataFrame 构建: rows=holidays, cols=h0..h23
+#   4. 差值计算: diff = holiday_avg - non_holiday_baseline
+#   5. sns.heatmap(diff_df, ...) 渲染
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_b3_per_holiday_hourly_vs_nonholiday(seekers: list[dict]):
     """
@@ -1026,8 +1347,31 @@ def dim_b3_per_holiday_hourly_vs_nonholiday(seekers: list[dict]):
     log(f"Saved: {csv_path}")
 
 
-# ── B4: 各个节假日 VS 工作日 VS 周末 小时段 (Line chart) ────────────
-#  B4: Per-Holiday hourly vs Workday & Weekend (Dual heatmap)
+# ═══════════════════════════════════════════════════════════════════════
+#  B4: 各个节假日 VS 工作日 VS 周末 小时段 (Dual Heatmap)
+#  B4: Per-Holiday Hourly vs Workday & Weekend Dual Heatmap
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   双热力图（B3 已在上面板，B4 在下面板 - 含两张热力图）
+#   第一张: 每小时(holiday - workday) 差值
+#   第二张: 每小时(holiday - weekend) 差值
+# 
+# 【统计口径】
+#   同 B3 逻辑计算差值
+#   workday_baseline / weekend_baseline = _hourly_avg() 计算
+# 
+# 【坐标轴】
+#   X轴: 0-23 小时
+#   Y轴: 节假日名称
+#   颜色条: 差值（symlog）
+# 
+# 【输出文件】
+#   PNG: 已合并到 B3 的 b3_b4_per_holiday_hourly_merged.png（下方两张热力图）
+#   CSV: b4_per_holiday_hourly_vs_workday_weekend.csv
+# 
+# 【特殊说明】
+#   图片已合并到 B3 输出，本函数仅保留 CSV 输出
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_b4_per_holiday_hourly_vs_workday_weekend(seekers: list[dict]):
     """

@@ -50,10 +50,6 @@ MIN_WORD_COUNT = 3      # 词在文档中出现的最小次数（过滤低频词
 MIN_WORD_LEN = 3        # 词的最小字符长度
 MAX_WORD_FRAC = 0.5     # 词出现在文档中的最大比例（过滤过于通用的词）
 
-# ── 中文类型名 → 英文映射工具 ──────────────────────────────────────
-from movie.utils.genre_map import to_en
-
-
 def tokenize(text: str) -> list[str]:
     """Simple English tokenizer for LDA.
        面向 LDA 的简单英文分词。"""
@@ -315,14 +311,23 @@ def _plot_per_holiday_topic_heatmap(
     plt.close(fig)
     log(f"Saved: {path}")
 
-
 # ═══════════════════════════════════════════════════════════════════════
-#  分析维度
+#  L1: 构建 LDA 主题模型
+#  L1: Build LDA Topic Model
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】主题-词热力图 + 主题词列表
+# 【统计口径】
+#   使用 gensim LDA 模型: NUM_TOPICS=10
+#   预处理: tokenization → 去停用词 → 创建词典 → BOW
+#   输出每组 topic 的 top 关键词及权重
+# 【输出文件】PNG: l1_topic_term_heatmap.png
+#   返回: lda_model, dictionary, bow_corpus, labels, doc_topic
+# 【特殊说明】doc_topic 矩阵供后续 L2~L4 分析使用
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_l1_build_model(seekers: list[dict], texts: list[str]):
     """Build LDA model and show topics.
-       构建 LDA 模型并展示主题。"""
+        构建 LDA 模型并展示主题。"""
     log("=" * 50)
     log("L1: Build LDA Topic Model")
 
@@ -358,9 +363,20 @@ def dim_l1_build_model(seekers: list[dict], texts: list[str]):
     return lda_model, dictionary, bow_corpus, labels, doc_topic
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  L2: 节假日 VS 非节假日 主题分布对比 (Bar)
+#  L2: Holiday vs Non-Holiday Topic Distribution
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】分组柱状图: 每个主题一个对比柱(holiday/non_holiday)
+# 【统计口径】
+#   doc_topic: (n_docs × n_topics) 概率分布矩阵
+#   按 date→period 分组 → 组内对各主题概率取均值
+# 【输出文件】PNG: l2_l3_holiday_topics_merged.png, CSV: l2_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_l2_holiday_vs_nonholiday_topics(doc_topic: np.ndarray, seekers: list[dict]):
     """Holiday vs non-holiday topic distribution comparison.
-       节假日 vs 非节假日主题分布对比。"""
+        节假日 vs 非节假日主题分布对比。"""
     log("=" * 50)
     log("L2: Holiday vs Non-Holiday Topic Distribution")
 
@@ -401,9 +417,17 @@ def dim_l2_holiday_vs_nonholiday_topics(doc_topic: np.ndarray, seekers: list[dic
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  L3: 节假日 VS 工作日 VS 周末 主题分布
+#  L3: Holiday vs Workday vs Weekend Topics
+# ═══════════════════════════════════════════════════════════════════════
+# 【统计口径】3组主题均值对比
+# 【输出文件】CSV: l3_holiday_workday_weekend_topics.csv (图片已合并到 L2)
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_l3_holiday_workday_weekend_topics(doc_topic: np.ndarray, seekers: list[dict]):
     """Holiday vs workday vs weekend topic distribution.
-       节假日 vs 工作日 vs 周末主题分布。"""
+        节假日 vs 工作日 vs 周末主题分布。"""
     log("=" * 50)
     log("L3: Holiday vs Workday vs Weekend Topic Distribution")
 
@@ -444,9 +468,17 @@ def dim_l3_holiday_workday_weekend_topics(doc_topic: np.ndarray, seekers: list[d
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  L4: 各节假日 VS 非节假日 主题分布 (Heatmap)
+#  L4: Per-Holiday Topic Distribution vs Non-Holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】热力图: 行=节假日, 列=主题, 值=holiday均值 - non_holiday均值
+# 【输出文件】PNG: l4_per_holiday_topics_heatmap.png, CSV: l4_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_l4_per_holiday_topics(doc_topic: np.ndarray, seekers: list[dict]):
     """Per-holiday topic distribution vs non-holiday baseline.
-       各节假日主题分布 vs 非节假日基线热力图。"""
+        各节假日主题分布 vs 非节假日基线热力图。"""
     log("=" * 50)
     log("L4: Per-Holiday Topic Intensity Heatmap")
 

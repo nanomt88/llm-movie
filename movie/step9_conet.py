@@ -26,7 +26,6 @@ import networkx as nx       # 复杂网络分析库
 import matplotlib
 matplotlib.use('Agg')       # 非交互式后端（服务器环境）
 import matplotlib.pyplot as plt
-from matplotlib.colors import to_rgba_array
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
 from movie.utils.genre_map import to_en
@@ -307,14 +306,22 @@ def _network_stats(G: nx.Graph, label: str = "Network"):
         title = G.nodes[n].get('title', n)
         log(f"    Top node: {title} (deg={G.degree(n)}, mentions={G.nodes[n].get('mentions',0)})")
 
-
 # ═══════════════════════════════════════════════════════════════════════
-#  分析维度
+#  N1: 全局电影共现网络 (Network Graph)
+#  N1: Overall Movie Co-occurrence Network
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】NetworkX 图 + Gephi 导出
+# 【统计口径】
+#   共现定义: 同一用户在同一次提问中提及的多部电影
+#   _build_cooccurrence_graph(seekers, movie_info) 构建无向图
+#   节点 = 电影(title+year+genre), 边 = 共现关系(权重=共现次数)
+# 【输出文件】GEXF: n1_overall_network.gexf (Gephi 可用)
+# 【特殊说明】返回 networkx.Graph 供 N4 中心度分析使用
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_n1_overall_network(seekers: list[dict], movie_info: dict):
     """Overall movie co-occurrence network.
-       全局电影共现网络。"""
+        全局电影共现网络。"""
     log("=" * 50)
     log("N1: Overall Co-occurrence Network")
 
@@ -331,6 +338,14 @@ def dim_n1_overall_network(seekers: list[dict], movie_info: dict):
 
     return G
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  N2: 节假日 VS 非节假日 共现网络 (GEXF)
+#  N2: Holiday vs Non-Holiday Co-occurrence Network
+# ═══════════════════════════════════════════════════════════════════════
+# 【统计口径】分别构建假日/非假日的共现网络
+# 【输出文件】GEXF: n2_holiday_network.gexf, n2_nonholiday_network.gexf
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_n2_holiday_vs_nonholiday_network(
     seekers: list[dict], movie_info: dict,
@@ -359,9 +374,19 @@ def dim_n2_holiday_vs_nonholiday_network(
     _save_gexf(G_nh, 'n2_nonholiday_network.gexf')
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  N3: 最高共现电影对 (Table)
+#  N3: Top Co-occurring Movie Pairs
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】表格/日志输出
+# 【统计口径】统计所有电影对(pair)的共现次数，取 TOP_N
+# 【输出文件】CSV: n3_top_cooccurrences.csv
+#   含: 电影A(title+year+genre), 电影B(title+year+genre), 共现次数
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_n3_top_cooccurrences(seekers: list[dict], movie_info: dict):
     """Top co-occurring movie pairs and their shared genres.
-       最高共现的电影对及其共享类型。"""
+        最高共现的电影对及其共享类型。"""
     log("=" * 50)
     log("N3: Top Co-occurring Movie Pairs")
 
@@ -406,9 +431,20 @@ def dim_n3_top_cooccurrences(seekers: list[dict], movie_info: dict):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  N4: 网络中心度分析 (Table)
+#  N4: Network Centrality Analysis
+# ═══════════════════════════════════════════════════════════════════════
+# 【分析维度】
+#   degree_centrality: 度中心度（共现广度）
+#   betweenness_centrality: 中介中心度（桥梁作用）
+#   closeness_centrality: 接近中心度（连接效率）
+# 【输出文件】CSV: n4_network_centrality.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_n4_network_centrality(G: nx.Graph):
     """Network centrality analysis (degree, betweenness, closeness).
-       网络中心度分析（度中心度、中介中心度、接近中心度）。"""
+        网络中心度分析（度中心度、中介中心度、接近中心度）。"""
     log("=" * 50)
     log("N4: Network Centrality Analysis")
 
@@ -466,9 +502,19 @@ def dim_n4_network_centrality(G: nx.Graph):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  N5: 题材级共现网络 (Network Graph)
+#  N5: Genre-Level Co-occurrence Network
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】NetworkX 图
+# 【统计口径】从电影共现关系聚合到类型层面
+#   节点 = 电影类型, 边 = 两类型出现在同一提问中的次数(求和)
+# 【输出文件】PNG: n5_genre_cooccurrence.png, GEXF: n5_*.gexf
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_n5_genre_cooccurrence(seekers: list[dict], movie_info: dict):
     """Genre-level co-occurrence network.
-       题材级共现网络分析：从电影共现关系中提取类型之间的关系。"""
+        题材级共现网络分析：从电影共现关系中提取类型之间的关系。"""
     log("=" * 50)
     log("N5: Genre Co-occurrence Network")
 

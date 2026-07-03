@@ -155,9 +155,9 @@ def _compute_turn_groups(rows: list[dict], dedup: bool = False) -> dict[str, int
             result['1'] += 1
         elif 2 <= cnt <= 5:
             result['2-5'] += 1
-        elif 5 <= cnt <= 20:
+        elif 6 <= cnt <= 20:
             result['5-20'] += 1
-        elif 20 <= cnt <= 100:
+        elif 21 <= cnt <= 100:
             result['20-100'] += 1
         else:
             result['100+'] += 1
@@ -404,8 +404,25 @@ def _plot_per_holiday_time_combined(
     log(f"Saved: {path}")
 
 
-# ── A1: 节假日 VS 非节假日 ────────────────────────────────────────────
-#  A1: Holiday vs Non-Holiday Turn Groups
+# ═══════════════════════════════════════════════════════════════════════
+#  E1: 节假日 VS 非节假日 轮次分组分布 (Bar)
+#  E1: Holiday vs Non-Holiday Turn Group Distribution
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】双面板分组柱状图: 左=去重, 右=不去重
+#  每组显示 1-turn, 2-turn, 3-turn, 4-turn 四个桶的占比(%)
+# 【统计口径】
+#   轮次(turn): 一个用户在一小时内与 AI 的完整对话 = user_msg + assistant_msg
+#   轮次分组: 将对话按 turn_count 分桶 → [1, 2, 3, 4+]
+#   去重: 同一用户的连续重复意图仅保留第一条
+#   计算比例而非绝对值
+# 【输出文件】PNG: e1_e2_holiday_turns_merged.png, CSV: e1_*.csv
+# 【代码逻辑】
+#   1. _compute_turn_groups(rows, date_set, dedup):
+#       过滤日期 → 按 user_session 聚合 → 统计各桶数量
+#       若 dedup: 按 (user_id, intent) 去重后计数
+#       返回 {1: count, 2: count, 3: count, 4+: count}
+#   2. 转百分比后绘制双面板分组柱状图
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_e1_holiday_vs_nonholiday_turns(rows: list[dict]):
     """Compare turn group distribution: holiday vs non-holiday.
@@ -455,8 +472,13 @@ def dim_e1_holiday_vs_nonholiday_turns(rows: list[dict]):
     log(f"Saved: {csv_path}")
 
 
-# ── A2: 节假日 VS 工作日 VS 周末 ──────────────────────────────────────
-#  A2: Holiday vs Workday vs Weekend Turn Groups
+# ═══════════════════════════════════════════════════════════════════════
+#  E2: 节假日 VS 工作日 VS 周末 轮次分组分布 (Bar)
+#  E2: Holiday vs Workday vs Weekend Turn Groups
+# ═══════════════════════════════════════════════════════════════════════
+# 【统计口径】3组(holiday/workday/weekend) × 4桶(1/2/3/4+ turn) × 去重/不去重
+# 【输出文件】CSV: e2_holiday_workday_weekend_turns.csv (图片已合并到E1)
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_e2_holiday_workday_weekend_turns(rows: list[dict]):
     """Compare turn group distribution: holiday vs workday vs weekend.
@@ -523,6 +545,15 @@ def _holiday_turn_groups(rows: list[dict], dedup: bool = False) -> dict[str, dic
         result[name] = _compute_turn_groups(p_rows, dedup=dedup)
     return result
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  E3: 各节假日轮次分组 VS 非节假日基线 (Heatmap)
+#  E3: Per-Holiday Turn Groups vs Non-Holiday Baseline
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】热力图: 行=节假日, 列=4个轮次桶(去重/不去重两版)
+#   值 = 各节假日各桶占比 - 非节假日基线各桶占比
+# 【输出文件】PNG: e3_e4_per_holiday_turns_merged.png, CSV: e3_*.csv
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_e3_per_holiday_vs_nonholiday_turns(rows: list[dict]):
     """Per-holiday turn groups vs non-holiday baseline (heatmap).
@@ -615,8 +646,14 @@ def dim_e3_per_holiday_vs_nonholiday_turns(rows: list[dict]):
     log(f"Saved: {csv_path}")
 
 
-# ── A4: 各个节假日 VS 工作日 VS 周末 ──────────────────────────────────
-#  A4: Per-Holiday vs Workday & Weekend Turn Groups
+# ═══════════════════════════════════════════════════════════════════════
+#  E4(旧版): 各节假日 VS 工作日/周末 轮次分组 (Heatmap)
+#  E4(OLD): Per-Holiday vs Workday & Weekend Turn Groups
+# ═══════════════════════════════════════════════════════════════════════
+# 【说明】旧版实现，保留用于对比验证
+# 【图表类型】热力图(按去重模式分两版): 行=节假日, 列=4桶
+# 【输出文件】CSV + PNG (旧版路径保留)
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_e4_per_holiday_vs_workday_weekend_turns_old(rows: list[dict]):
     """Per-holiday turn groups vs workday & weekend (heatmap by mode).
@@ -725,6 +762,15 @@ def dim_e4_per_holiday_vs_workday_weekend_turns_old(rows: list[dict]):
                             f'{baselines["workday"]["dedup"].get(b, 0) / wd_total_d * 100:.2f}%',
                             f'{baselines["weekend"]["dedup"].get(b, 0) / we_total_d * 100:.2f}%'])
     log(f"Saved: {csv_path}")
+
+# ═══════════════════════════════════════════════════════════════════════
+#  E4(新版): 各节假日 VS 工作日/周末 轮次分组 (Heatmap)
+#  E4: Per-Holiday vs Workday & Weekend Turn Groups
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】热力图: vs 工作日差值 + vs 周末差值
+# 【输出文件】CSV: e4_per_holiday_vs_workday_weekend_turns.csv
+#   图片已合并到 E3
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_e4_per_holiday_vs_workday_weekend_turns(rows: list[dict]):
     """Per-holiday turn groups vs workday & weekend (heatmap).
@@ -961,9 +1007,22 @@ def _plot_time_comparison(stats_dict: dict[str, dict], title: str, filename: str
     log(f"Saved: {path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  F1: 节假日 VS 非节假日 会话时间指标 (Bar)
+#  F1: Holiday vs Non-Holiday Session Time Metrics
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】双面板分组柱状图: 左=平均间隔(秒), 右=平均时长(秒)
+# 【统计口径】
+#   - 会话间隔(session interval): 同一用户相邻提问的时间差(秒)
+#   - 会话时长(session duration): 某一对话从首条到最后一条的时间跨度(秒)
+#   - _session_time_stats(rows, date_set) 返回 {avg_interval_seconds, avg_duration_seconds, ...}
+#   过滤: 仅统计 valid_interval_sessions(间隔≤3600秒) 和 valid_duration_sessions
+# 【输出文件】PNG: f1_f2_holiday_time_merged.png, CSV: f1_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_f1_holiday_vs_nonholiday_time(rows: list[dict]):
     """Compare session time metrics: holiday vs non-holiday.
-       比较节假日 vs 非节假日的会话时间指标。"""
+        比较节假日 vs 非节假日的会话时间指标。"""
     log("=" * 50)
     log("F1: Holiday vs Non-Holiday Session Time Metrics")
 
@@ -1002,9 +1061,17 @@ def dim_f1_holiday_vs_nonholiday_time(rows: list[dict]):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  F2: 节假日 VS 工作日 VS 周末 会话时间指标
+#  F2: Holiday vs Workday vs Weekend Session Time
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】已合并到 F1 的下面板，此处仅输出 CSV
+# 【输出文件】CSV: f2_holiday_workday_weekend_time.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_f2_holiday_workday_weekend_time(rows: list[dict]):
     """Compare session time metrics: holiday vs workday vs weekend.
-       比较节假日 vs 工作日 vs 周末的会话时间指标。"""
+        比较节假日 vs 工作日 vs 周末的会话时间指标。"""
     log("=" * 50)
     log("F2: Holiday vs Workday vs Weekend Session Time")
 
@@ -1039,9 +1106,17 @@ def dim_f2_holiday_workday_weekend_time(rows: list[dict]):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  F3: 各节假日会话时间指标 VS 非节假日基线 (Heatmap)
+#  F3: Per-Holiday Session Time vs Non-Holiday Baseline
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】热力图: 行=节假日, 列=平均间隔/平均时长, 值=差值
+# 【输出文件】PNG: f3_f4_per_holiday_time_merged.png, CSV: f3_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_f3_per_holiday_vs_nonholiday_time(rows: list[dict]):
     """Per-holiday time metrics vs non-holiday baseline.
-       各节假日时间指标 vs 非节假日基线。"""
+        各节假日时间指标 vs 非节假日基线。"""
     log("=" * 50)
     log("F3: Per-Holiday Session Time vs Non-Holiday")
 
@@ -1111,9 +1186,18 @@ def dim_f3_per_holiday_vs_nonholiday_time(rows: list[dict]):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  F4: 各节假日 VS 工作日/周末 会话时间 (Heatmap)
+#  F4: Per-Holiday Session Time vs Workday & Weekend
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】双热力图: vs 工作日差值 + vs 周末差值
+# 【输出文件】CSV: f4_per_holiday_vs_workday_weekend_time.csv
+#   图片已合并到 F3
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_f4_per_holiday_vs_workday_weekend_time(rows: list[dict]):
     """Per-holiday time metrics vs workday & weekend baselines (heatmap).
-    各节假日时间指标 vs 工作日/周末基线（热力图）。"""
+     各节假日时间指标 vs 工作日/周末基线（热力图）。"""
     log("=" * 50)
     log("F4: Per-Holiday Session Time vs Workday & Weekend")
 
@@ -1332,6 +1416,19 @@ def _plot_day_session_comparison(
     log(f"Saved: {path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  G1: 节假日 VS 非节假日 日均单日/跨日会话 (Bar)
+#  G1: Holiday vs Non-Holiday Per-Day Single/Cross-Day Sessions
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】双面板柱状图: 左=单日会话(per-day avg), 右=跨日会话(per-day avg)
+# 【统计口径】
+#   single_day session: 会话所有提问在同一天内
+#   cross_day session: 会话跨越多个日期
+#   _day_session_stats(rows, session_set) 统计 raw + per-day 两种口径
+#   per_day = raw / days_in_period
+# 【输出文件】PNG: g1_g2_holiday_day_sessions_merged.png, CSV: g1_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_g1_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     """Compare per-day single/cross-day session averages: holiday vs non-holiday.
         比较节假日 vs 非节假日每天的平均单日/跨日会话数。"""
@@ -1390,6 +1487,14 @@ def dim_g1_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  G2: 节假日 VS 工作日 VS 周末 日均单日/跨日会话
+#  G2: Holiday vs Workday vs Weekend Cross-Day Sessions
+# ═══════════════════════════════════════════════════════════════════════
+# 【统计口径】3组(holiday/workday/weekend) × 2指标(single/cross per-day avg)
+# 【输出文件】CSV: g2_holiday_workday_weekend_day_sessions.csv (图片已合并到G1)
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_g2_holiday_workday_weekend_day_sessions(rows: list[dict]):
     """Compare per-day single/cross-day session averages: holiday vs workday vs weekend.
         比较节假日 vs 工作日 vs 周末每天的平均单日/跨日会话数。"""
@@ -1443,6 +1548,15 @@ def dim_g2_holiday_workday_weekend_day_sessions(rows: list[dict]):
                         f'{s["cross_day_ratio"]:.1f}%'])
     log(f"Saved: {csv_path}")
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  G3: 各节假日 VS 非节假日 日均单日/跨日会话 (Heatmap)
+#  G3: Per-Holiday Session vs Non-Holiday Baseline
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】热力图: 行=节假日, 列=single_per_day/cross_per_day, 值=差值
+# 【输出文件】PNG: g3_g4_per_holiday_day_sessions_merged.png, CSV: g3_*.csv
+# 【特殊说明】跨日会话数据较少时可能出现 NaN，处理中跳过
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_g3_per_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
     """Per-holiday single/cross-day per-day averages vs non-holiday baseline.
@@ -1556,6 +1670,14 @@ def dim_g3_per_holiday_vs_nonholiday_day_sessions(rows: list[dict]):
                         f'{nh_single_per_day:.4f}', f'{nh_cross_per_day:.4f}'])
     log(f"Saved: {csv_path}")
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  G4: 各节假日 VS 工作日/周末 日均单日/跨日会话
+#  G4: Per-Holiday vs Workday & Weekend Day Sessions
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】双热力图: vs 工作日差值 + vs 周末差值 (图片合并到 G3)
+# 【输出文件】CSV: g4_per_holiday_vs_workday_weekend_day_sessions.csv
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_g4_per_holiday_vs_workday_weekend_day_sessions(rows: list[dict]):
     """Per-holiday single/cross-day per-day averages vs workday & weekend baselines.

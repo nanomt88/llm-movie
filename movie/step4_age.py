@@ -442,6 +442,19 @@ def _plot_age_grouped_bars_two_row(
     log(f"Saved: {path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  H1: 节假日 VS 非节假日 年龄段活跃用户 (Bar)
+#  H1: Holiday vs Non-Holiday Age Group Active Users
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】双面板柱状图: 左=holiday vs non-holiday, 右=holiday vs workday vs weekend
+#   每面板各年龄段分组: 10s, 20s, 30s, 40s, 50s, 60s+
+# 【统计口径】
+#   user_ages: {user_id: age_group} 映射
+#   _age_daily_active(seekers, date_set, user_ages) → {age_group: avg_daily_users}
+#   遍历各组日期 → 逐天统计各 age_group 的活跃用户数 → 平均
+# 【输出文件】PNG: h1_h2_age_merged.png, CSV: h1_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_h1_holiday_vs_nonholiday_age(seekers: list[dict], user_ages: dict):
     """Compare avg daily active users by age: holiday vs non-holiday.
     对比节假日 vs 非节假日的各年龄段日均活跃用户数。"""
@@ -476,6 +489,14 @@ def dim_h1_holiday_vs_nonholiday_age(seekers: list[dict], user_ages: dict):
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  H2: 节假日 VS 工作日 VS 周末 年龄段活跃用户
+#  H2: Holiday vs Workday vs Weekend Age Group
+# ═══════════════════════════════════════════════════════════════════════
+# 【输出文件】CSV: h2_holiday_workday_weekend_age.csv (图片已合并到 H1 下面板)
+# 【统计口径】3组 × 6年龄段
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_h2_holiday_workday_weekend_age(seekers: list[dict], user_ages: dict):
     """Compare avg daily active users by age: holiday vs workday vs weekend.
     对比节假日 vs 工作日 vs 周末的各年龄段日均活跃用户数。"""
@@ -509,6 +530,15 @@ def dim_h2_holiday_workday_weekend_age(seekers: list[dict], user_ages: dict):
                         f'{period_age["Weekend"].get(seg, 0):.2f}'])  # 写入各周期的日均值
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  H1+H2 合并渲染 (双面板)
+#  H1+H2 Combined: Dual Panel Age Chart Renderer
+# ═══════════════════════════════════════════════════════════════════════
+# 【作用】将 H1 和 H2 的数据合并渲染到一张双面板图中
+# 【图表】上=holiday vs non-holiday, 下=holiday vs workday vs weekend
+# 【代码逻辑】收集两组数据 → fig, (ax1, ax2) → 分别绘制柱状图 → 保存 PNG
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_h1_h2_combined(seekers: list[dict], user_ages: dict):
     """H1+H2 combined: Holiday vs Non-Holiday (top) + Holiday vs Workday vs Weekend (bottom).
@@ -563,6 +593,17 @@ def dim_h1_h2_combined(seekers: list[dict], user_ages: dict):
                         f'{period_age["Weekend"].get(seg, 0):.2f}'])
     log(f"Saved: {csv_path}")
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  H3: 各节假日年龄段活跃用户 VS 非节假日基线 (Stacked Bar)
+#  H3: Per-Holiday Age Distribution vs Non-Holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】堆叠柱状图(每节假日 × 每年龄段) + 非节假日基线
+# 【统计口径】节假日按名称聚合 → _age_daily_active() 计算各年龄段日均
+#   _age_grouped_bar() 辅助绘制
+# 【输出文件】PNG: h3_h4_per_holiday_age_merged.png, CSV: h3_*.csv
+# 【特殊说明】使用毛玻璃效果(alpha=0.85)区分假期自身与基线
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_h3_per_holiday_vs_nonholiday_age(seekers: list[dict], user_ages: dict):
     """
@@ -672,6 +713,15 @@ def dim_h3_per_holiday_vs_nonholiday_age(seekers: list[dict], user_ages: dict):
         w.writerow(row)  # 写入行
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  H4: 各节假日 VS 工作日/周末 年龄段活跃用户
+#  H4: Per-Holiday Age vs Workday & Weekend
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】已合并到 H3 图中（显示工作日/周末基线）
+# 【输出文件】CSV: h4_per_holiday_vs_workday_weekend_age.csv
+#   图片已合并到 H3
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_h4_per_holiday_vs_workday_weekend_age(seekers: list[dict], user_ages: dict):
     """Per-holiday age avg daily active users vs workday & weekend.
@@ -808,6 +858,16 @@ def _plot_age_hourly_lines(
     log(f"Saved: {path}")  # 日志记录保存信息
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  I1: 逐小时年龄段活跃用户: 节假日 VS 非节假日 (Line)
+#  I1: Hourly Age: Holiday vs Non-Holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】多面板折线图: 每个年龄段一个子图, 2组曲线对比
+# 【统计口径】24小时 × 6年龄段 × 2组(holiday/non-holiday)
+#   _hourly_age_active(seekers, date_set, user_ages) → {seg: [24 values]}
+# 【输出文件】PNG: i1_i2_hourly_age_merged.png, CSV: i1_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_i1_hourly_holiday_vs_nonholiday_age(seekers: list[dict], user_ages: dict):
     """Hourly active users by age: holiday vs non-holiday.
     节假日 vs 非节假日的逐小时各年龄段活跃用户数对比。"""
@@ -840,6 +900,13 @@ def dim_i1_hourly_holiday_vs_nonholiday_age(seekers: list[dict], user_ages: dict
             w.writerow(row)  # 写入该小时的数据行
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  I2: 逐小时年龄段活跃用户: 节假日 VS 工作日 VS 周末
+#  I2: Hourly Age: Holiday vs Workday vs Weekend
+# ═══════════════════════════════════════════════════════════════════════
+# 【输出文件】CSV: i2_hourly_age_workday_weekend.csv (图片已合并到 I1 下面板)
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_i2_hourly_holiday_workday_weekend_age(seekers: list[dict], user_ages: dict):
     """Hourly age: holiday vs workday vs weekend.
@@ -876,6 +943,14 @@ def dim_i2_hourly_holiday_workday_weekend_age(seekers: list[dict], user_ages: di
             w.writerow(row)  # 写入该小时的数据行
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  I3(旧版): 各节假日逐小时年龄段差值 (Heatmap Per Segment)
+#  I3(OLD): Per-Holiday Hourly Age Diff per Age Segment
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】每个年龄段一张热力图，垂直排列
+# 【说明】旧版实现，每个年龄段独立热力图，保留用于对比
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_i3_per_holiday_hourly_age_old(seekers: list[dict], user_ages: dict):
     """
@@ -950,6 +1025,16 @@ def dim_i3_per_holiday_hourly_age_old(seekers: list[dict], user_ages: dict):
                     w.writerow([name, seg, h, f'{diff:.4f}'])  # 写入该行
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  I3(新版): 各节假日逐小时年龄段差值 (Stacked Heatmap)
+#  I3: Per-Holiday Hourly Age Diff (Stacked)
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】垂直堆叠热力图: 行=年龄段×节假日(每个年龄段先堆叠所有节假日,再切换到下一年龄段)
+#   列=0-23小时, 值=节假日与非节假日的绝对值差值
+# 【输出文件】PNG: i3_i4_per_holiday_hourly_age_merged.png, CSV: i3_*.csv
+# 【特殊说明】所有年龄段共享同一色标
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_i3_per_holiday_hourly_age(seekers: list[dict], user_ages: dict):
     """
@@ -1042,6 +1127,15 @@ def dim_i3_per_holiday_hourly_age(seekers: list[dict], user_ages: dict):
                     w.writerow([name, seg, h, f'{diff_data[seg][name][h]:.4f}'])
     log(f"Saved: {csv_path}")
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  I4: 各节假日逐小时年龄段 VS 工作日/周末 (折线图)
+#  I4: Per-Holiday Hourly Age vs Workday & Weekend
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】每个年龄段一张子图，每条曲线=节假日某天 vs 工作日/周末基线
+# 【输出文件】CSV: i4_per_holiday_hourly_age_vs_workday_weekend.csv
+#   图片已合并到 I3
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_i4_per_holiday_hourly_age_vs_workday_weekend(
     seekers: list[dict], user_ages: dict):

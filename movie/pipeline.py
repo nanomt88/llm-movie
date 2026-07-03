@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Master pipeline: runs Step 1 → Step 10 sequentially.
- 主流水线：按顺序依次运行步骤 1 到步骤 10。
+Master pipeline: runs Step 1 → Step 12 sequentially.
+ 主流水线：按顺序依次运行步骤 1 到步骤 12。
 
 Usage（使用方法）:
-    python pipeline.py               # 运行所有步骤
+    python pipeline.py                # 运行所有步骤
     python pipeline.py --steps 1 3 5  # 只运行指定的步骤（1、3、5）
-    python pipeline.py --skip 4      # 跳过步骤 4
+    python pipeline.py --skip 4       # 跳过步骤 4
 """
 
 import sys          # 系统模块，用于程序退出等
@@ -20,16 +20,18 @@ from movie.config import log, STEP_DIRS  # 导入日志函数和步骤输出目�
 
 # 步骤编号 -> 步骤名称的映射字典
 STEPS = {
-    1: "Question Frequency Analysis",      # 步骤1：提问频率分析
-    2: "Active Users Analysis",            # 步骤2：活跃用户分析
-    3: "Conversation Analysis",            # 步骤3：会话分析
-    4: "Age Distribution Analysis",        # 步骤4：年龄分布分析
-    5: "Movie Genre Analysis",             # 步骤5：电影类型分析
-    6: "Movie Daily Analysis",             # 步骤6：电影每日数据
-    7: "Word Cloud & High-Frequency Words",# 步骤7：高频词与词云
+    1: "Question Frequency Analysis",           # 步骤1：提问频率分析
+    2: "Active Users Analysis",                 # 步骤2：活跃用户分析
+    3: "Conversation Analysis",                 # 步骤3：会话分析
+    4: "Age Distribution Analysis",             # 步骤4：年龄分布分析
+    5: "Movie Genre Analysis",                  # 步骤5：电影类型分析
+    6: "Movie Daily Analysis",                  # 步骤6：电影每日数据
+    7: "Word Cloud & High-Frequency Words",     # 步骤7：高频词与词云
     8: "LDA Topic Model & Holiday Preference",  # 步骤8：LDA主题模型与节假日偏好
-    9: "Co-occurrence Network & Sentiment",    # 步骤9：共现网络与情感分析
-    10: "Aspect-Based Sentiment Analysis",     # 步骤10：ABSA与节假日差异化
+    9: "Co-occurrence Network & Sentiment",     # 步骤9：共现网络与情感分析
+    10: "Aspect-Based Sentiment Analysis",      # 步骤10：ABSA与节假日差异化
+    11: "Sentiment Analysis",                   # 步骤11：情感分析
+    12: "Recommendation Insight Analysis",      # 步骤12：推荐洞察分析
 }
 
 
@@ -70,6 +72,10 @@ def run_step(step_num: int, data: dict = None) -> float:
             from movie.step9_conet import main as m
         elif step_num == 10:
             from movie.step10_absa import main as m
+        elif step_num == 11:
+            from movie.step11_sentiment import main as m
+        elif step_num == 12:
+            from movie.step12_rec_insight import main as m
         else:
             log(f"  Unknown step {step_num}")  # 未知步骤
             return 0.0
@@ -90,11 +96,11 @@ def main():
        解析命令行参数并按顺序运行选中的步骤。"""
     # 创建参数解析器
     parser = argparse.ArgumentParser(
-        description="Movie Analysis Pipeline — Step 1 to Step 6")
+        description="Movie Analysis Pipeline — Step 1 to Step 12")
     # --steps 参数：指定要运行的步骤编号列表
     parser.add_argument(
         '--steps', nargs='+', type=int,
-        help='Steps to run (e.g. --steps 1 3 5). Default: all steps 1-6.')
+        help='Steps to run (e.g. --steps 1 3 5). Default: all steps 1-12.')
     # --skip 参数：指定要跳过的步骤编号列表
     parser.add_argument(
         '--skip', nargs='+', type=int, default=[],

@@ -79,10 +79,10 @@ STOPWORDS = set({
 # 附加领域噪音词：与电影讨论常见但不携带偏好信号的词汇
 DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                'watch', 'watched', 'watching', 'watchlist', 'like',
-               'liked', 'looking', 'look', 'recommend', 'recommended',
+               'liked',                'looking', 'look', 'recommend', 'recommended',
                'recommendation', 'recommendations', 'suggest', 'suggested',
                'suggestion', 'suggestions', 'anyone', 'somebody', 'know',
-               'looking', 'searching', 'find', 'found', 'seen', 'seeing',
+               'searching', 'find', 'found', 'seen', 'seeing',
                'title', 'reddit', 'post', 'sub', 'amp', 'x200b', 'gt',
                'br', 've', 'll', 'don', 'doesn', 'didn', 'won', 'isn',
                'https', 'http', 'www', 'com', 'org', 'edit', 'update',
@@ -396,14 +396,21 @@ def _save_word_csv(
             w.writerow(row)
     log(f"Saved: {path}")
 
-
 # ═══════════════════════════════════════════════════════════════════════
-#  分析维度
+#  W1: 全局高频词统计和词云
+#  W1: Overall Word Frequency & Word Cloud
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】词云图 + 高频词列表
+# 【统计口径】
+#   对所有用户的 proc_text 进行词频统计
+#   使用 WordCloud 库生成词云图
+#   同时输出 CSV 格式的词频表
+# 【输出文件】PNG: w1_overall_wordcloud.png, CSV: w1_overall_word_freq.csv
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_w1_overall_wordcloud(seekers: list[dict]):
     """Overall word frequency and word cloud.
-       全局高频词统计和词云。"""
+        全局高频词统计和词云。"""
     log("=" * 50)
     log("W1: Overall Word Frequency & Word Cloud")
 
@@ -420,9 +427,23 @@ def dim_w1_overall_wordcloud(seekers: list[dict]):
                    {'overall': freq})
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  W2: 节假日 VS 非节假日 词频对比 (Bar)
+#  W2: Holiday vs Non-Holiday Word Frequency
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】柱状图/表格: 对比节假日与非节假日的 top 词及比例
+# 【统计口径】
+#   按 period 分组计算词频
+#   计算 ratio = holiday_freq / non_holiday_freq
+#   筛选 ratio ≥ ratio_threshold(1.5) 或 ≤ 1/ratio_threshold 的差异词
+# 【输出文件】CSV: w2_holiday_vs_nonholiday_words.csv
+# 【特殊说明】_find_keywords() 辅助函数查找差异关键词
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_w2_holiday_vs_nonholiday_words(seekers: list[dict], ratio_threshold: float = 1.5):
     """Holiday vs non-holiday word frequency comparison.
-       节假日 vs 非节假日词频对比。
+        节假日 vs 非节假日词频对比。
+
 
     Args:
         seekers: 用户提问记录列表
@@ -467,9 +488,17 @@ def dim_w2_holiday_vs_nonholiday_words(seekers: list[dict], ratio_threshold: flo
                    {'holiday': h_freq, 'non_holiday': nh_freq})
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  W3: 节假日 VS 工作日 VS 周末 词频对比
+#  W3: Holiday vs Workday vs Weekend Word Frequency
+# ═══════════════════════════════════════════════════════════════════════
+# 【统计口径】3组(holiday/workday/weekend) 词频对比
+# 【输出文件】CSV: w3_holiday_workday_weekend_words.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_w3_holiday_workday_weekend_words(seekers: list[dict]):
     """Holiday vs workday vs weekend word frequency.
-       节假日 vs 工作日 vs 周末词频对比。"""
+        节假日 vs 工作日 vs 周末词频对比。"""
     log("=" * 50)
     log("W3: Holiday vs Workday vs Weekend Word Frequency")
 
@@ -493,9 +522,19 @@ def dim_w3_holiday_workday_weekend_words(seekers: list[dict]):
     _save_word_csv('w3_holiday_workday_weekend_words.csv', raw_dict)
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  W4: 各节假日词频 VS 非节假日基线 (Bar per Holiday)
+#  W4: Per-Holiday Word Frequency vs Non-Holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】每个节假日一个水平柱状图: 显示 top_n 差异词及倍数
+# 【统计口径】_find_keywords() 计算各节假日 vs 非节假日的词频倍率
+# 【输出文件】PNG: w4_* (每个节假日独立图片), CSV: w4_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_w4_per_holiday_words(seekers: list[dict], top_n: int = 30):
     """Per-holiday word frequency vs non-holiday baseline (one bar chart per holiday).
-       各个节假日词频 vs 非节假日基线（每个节假日一个柱状图）。
+        各个节假日词频 vs 非节假日基线（每个节假日一个柱状图）。
+
 
     For each holiday, plots the top N words with highest composite score
     (holiday avg daily freq × min(fold_ratio, 20)), fully sorted by score.
@@ -644,9 +683,19 @@ def dim_w4_per_holiday_words(seekers: list[dict], top_n: int = 30):
             log(f"    {hn}: {[(w, f'{h:.1f}/d', f'{r:.1f}x') for w, h, r in top]}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  W5: 各节假日 VS 非节假日 词频 log2 倍率热力图 (Heatmap)
+#  W5: Per-Holiday Word Frequency Log2 Ratio Heatmap
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】热力图: 行=高频词, 列=节假日, 值=log2(holiday/non_holiday)
+#   0 = 与基线相同, >0 = 节假日更突出, <0 = 非节假日更突出
+# 【输出文件】PNG: w5_per_holiday_words_heatmap.png, CSV: w5_*.csv
+# 【特殊说明】clustermap 行列聚类; 同时输出独立日志显示 top 词
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_w5_per_holiday_words_heatmap(seekers: list[dict]):
     """Per-holiday word frequency vs non-holiday baseline (log2 ratio heatmap).
-       各节假日单词 log2 倍率热力图（颜色 = log2(节假日日均 / 非节假日日均)）。
+        各节假日单词 log2 倍率热力图（颜色 = log2(节假日日均 / 非节假日日均)）。
 
     Values:
       0   = same as baseline            # 与基线相同
@@ -888,9 +937,21 @@ def _score_categories(
     return scores
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  W6: 各节假日观影特征归纳 (Category Scores)
+#  W6: Holiday Viewing Profile Categorization
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】特征得分表/雷达图
+# 【统计口径】对 W2/W4 筛选出的差异词进行人工分类(类别词库匹配)
+#   类别: family, comedy, action, romance, holiday_themed, animation, documentary 等
+#   计算各类别的总得分 = 该类别下所有词的日均提及次数之和
+# 【输出文件】CSV: w6_holiday_viewing_profile.csv
+# 【特殊说明】使用预定义的 category_keywords 字典进行匹配
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_w6_holiday_viewing_profile(seekers: list[dict]):
     """Categorize elevated holiday words and summarize viewing differences.
-       对每个节假日高频差异词汇进行分类和归纳，总结各个节假日的观影差异。
+        对每个节假日高频差异词汇进行分类和归纳，总结各个节假日的观影差异。
 
     Output:
       - w6_holiday_viewing_profile.csv — category scores per holiday

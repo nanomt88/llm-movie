@@ -84,6 +84,20 @@ def _daily_questions_by_year(seekers: list[dict]) -> dict[int, dict[str, int]]:
     return result
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  Y1: 年度/月度提问趋势 (Line Chart)
+#  Y1: Yearly/Monthly Question Trends
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】双面板折线图
+#   左图: 各年份每天提问数（年-日对比，每年一条线）
+#   右图: 历年各月提问数（月-年对比，每月一条线）
+# 【统计口径】
+#   _yearly_daily_counts(seekers) → {year: {day_index: count}}
+#   _monthly_counts(seekers) → {year: {month: count}}
+#   仅保留数据量充足的年份
+# 【输出文件】PNG: y1_yearly_monthly_questions.png, CSV: y1_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_y1_yearly_monthly_questions(seekers: list[dict]):
     """
     Line chart: yearly daily question counts (one line per year, day-by-day).

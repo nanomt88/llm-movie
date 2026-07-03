@@ -233,7 +233,16 @@ def _plot_genre_grouped_bars(
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  A: Weekly period - genre  A：周周期 - 类型分析
+#  J1: 节假日 VS 非节假日 电影类型日均提及 (Bar)
+#  J1: Holiday vs Non-Holiday Genre Avg Daily Mentions
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】水平柱状图(条形图): 各类型日均提及次数, holiday vs non-holiday 对比
+# 【统计口径】
+#   seeker_genres: [{user_id, date, period, genre, ...}] 列表
+#   _avg_daily_genre(seeker_genres, date_set) → {genre: avg_daily_mentions}
+#   取 TOP_N_GENRES(15) 个最常见类型
+# 【输出文件】PNG: j1_j2_holiday_genre_merged.png, CSV: j1_*.csv
+# 【特殊说明】类型按提及频率排序，显示在 Y 轴（水平条形图）
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_j1_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
@@ -271,6 +280,13 @@ def dim_j1_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
             w.writerow([g, f'{h_avg.get(g, 0):.2f}', f'{nh_avg.get(g, 0):.2f}'])
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  J2: 节假日 VS 工作日 VS 周末 电影类型日均提及
+#  J2: Holiday vs Workday vs Weekend Genre
+# ═══════════════════════════════════════════════════════════════════════
+# 【输出文件】CSV: j2_holiday_workday_weekend_genre.csv (图片已合并到J1)
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_j2_holiday_workday_weekend_genre(seeker_genres: list[dict]):
     """Compare genre avg daily mentions: holiday vs workday vs weekend.
@@ -313,6 +329,14 @@ def dim_j2_holiday_workday_weekend_genre(seeker_genres: list[dict]):
                         f'{period_avg["Weekend"].get(g, 0):.2f}'])
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  J3: 各节假日电影类型分布 VS 非节假日基线 (Heatmap)
+#  J3: Per-Holiday Genre Distribution vs Non-Holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】热力图: 行=TOP_N 类型, 列=节假日, 值=日均提及次数差值 vs 非节假日基线
+# 【输出文件】PNG: j3_j4_per_holiday_genre_merged.png, CSV: j3_*.csv
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_j3_per_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
     """Per-holiday genre distribution vs non-holiday baseline (HEATMAP).
@@ -396,6 +420,13 @@ def dim_j3_per_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
         w.writerow(row)
     log(f"Saved: {csv_path}")
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  J4: 各节假日 VS 工作日/周末 电影类型分布 (Heatmap)
+#  J4: Per-Holiday Genre vs Workday & Weekend
+# ═══════════════════════════════════════════════════════════════════════
+# 【输出文件】CSV: j4_per_holiday_vs_workday_weekend_genre.csv (图片已合并到 J3)
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres: list[dict]):
     """Per-holiday genre avg daily mention vs workday & weekend baselines.
@@ -491,10 +522,14 @@ def dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres: list[dict]):
             w.writerow(row)
     log(f"Saved: {csv_path}")
 
-
 # ═══════════════════════════════════════════════════════════════════════
-#  J5: 节假日 × 电影类型 热力图
+#  J5: 节假日 × 电影类型 热力图 (Heatmap)
 #  J5: Per-Holiday Genre Mention Heatmap
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】热力图: X轴=节假日, Y轴=类型, 值=日均提及次数
+# 【统计口径】双向排序: X/Y轴均按总提及数降序排列
+# 【输出文件】PNG: j5_per_holiday_genre_heatmap.png, CSV: j5_*.csv
+# 【特殊说明】展示节假日间类型提及的绝对量差异，非差值
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_j5_per_holiday_genre_heatmap(seeker_genres: list[dict]):
@@ -651,6 +686,19 @@ def _plot_genre_hourly_lines(
     log(f"Saved: {path}")  # 日志记录保存信息
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  K1: 逐小时类型提及分布: 节假日 VS 非节假日 (Line)
+#  K1: Hourly Genre: Holiday vs Non-Holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】多面板折线图: 每个热门类型一个子图, 2组曲线(holiday/non-holiday)
+#   归一化为百分比显示
+# 【统计口径】
+#   _genre_hourly_mention_counts(seeker_genres, date_set) → {genre: [24 counts]}
+#   各类型逐小时提及数次数的原始值
+#   归一化: 每小时值 / 该类型全天总提及数 × 100（百分比）
+# 【输出文件】PNG: k1_hourly_holiday_vs_nonholiday_genre.png, CSV: k1_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_k1_hourly_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
     """Hourly genre mention distribution: holiday vs non-holiday.
     节假日 vs 非节假日的逐小时类型提及分布。"""
@@ -684,6 +732,14 @@ def dim_k1_hourly_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
             w.writerow(row)  # 写入该小时的数据行
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  K2: 逐小时类型提及分布: 节假日 VS 工作日 VS 周末
+#  K2: Hourly Genre: Holiday vs Workday vs Weekend
+# ═══════════════════════════════════════════════════════════════════════
+# 【输出文件】PNG: k2_hourly_holiday_workday_weekend_genre.png, CSV: k2_*.csv
+#   独立图片（非合并到 K1）
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_k2_hourly_holiday_workday_weekend_genre(seeker_genres: list[dict]):
     """Hourly genre: holiday vs workday vs weekend.
@@ -723,6 +779,15 @@ def dim_k2_hourly_holiday_workday_weekend_genre(seeker_genres: list[dict]):
             w.writerow(row)  # 写入该小时的数据行
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  K3: 各节假日逐小时类型差值 (Heatmap per Genre)
+#  K3: Per-Holiday Hourly Genre Diff from Non-Holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】每种类型一张热力图: 行=节假日, 列=0-23小时, 值=差值
+# 【输出文件】PNG: k3_genre_{g}_hourly_heatmap.png (每种类型一张), CSV: k3_*.csv
+# 【特殊说明】每个热门类型独立保存 PNG
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_k3_per_holiday_hourly_genre(seeker_genres: list[dict]):
     """Per-holiday hourly genre heatmap vs non-holiday.
@@ -797,6 +862,14 @@ def dim_k3_per_holiday_hourly_genre(seeker_genres: list[dict]):
                     w.writerow([name, g, h, f'{diff:.4f}'])  # 写入该行
     log(f"Saved: {csv_path}")  # 日志记录 CSV 保存信息
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  K4: 各节假日逐小时类型 VS 工作日/周末 (Heatmap)
+#  K4: Per-Holiday Hourly Genre vs Workday & Weekend
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】每种类型双热力图: vs 工作日差值 + vs 周末差值
+# 【输出文件】CSV: k4_per_holiday_hourly_genre_vs_workday_weekend.csv
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_k4_per_holiday_hourly_genre_vs_workday_weekend(
     seeker_genres: list[dict]):

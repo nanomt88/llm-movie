@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
-from movie.utils.genre_map import to_en, get_all_english_genres
+from movie.utils.genre_map import to_en
 
 # ── 初始化 ──────────────────────────────────────────────────────────
 setup_matplotlib()
@@ -471,14 +471,21 @@ def _aggregate_aspect_sentiment(
             }
     return result
 
-
 # ═══════════════════════════════════════════════════════════════════════
-#  分析维度
+#  A1(ABSA): 全局方面提及分布 (Bar)
+#  A1: Overall Aspect Mention Distribution
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】柱状图: X轴=方面(aspect), Y轴=提及次数
+# 【统计口径】
+#   aspect_records: [{aspect, sentiment, date, period, ...}]
+#   统计各方面在所有数据中的总提及次数
+#   按提及次数降序排列
+# 【输出文件】PNG: a1_aspect_distribution.png, CSV: a1_*.csv
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_a1_aspect_distribution(aspect_records: list[dict]):
     """Overall aspect mention distribution.
-       全局方面提及分布统计：各方面被提及的次数与占比。"""
+        全局方面提及分布统计：各方面被提及的次数与占比。"""
     log("=" * 50)
     log("A1: Aspect Mention Distribution")
 
@@ -509,6 +516,16 @@ def dim_a1_aspect_distribution(aspect_records: list[dict]):
     log(f"Saved: {path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  A2(ABSA): 各方面总体情感 (Bar)
+#  A2: Overall Sentiment per Aspect
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】柱状图: X轴=方面, Y轴=平均情感得分(-1~1)
+# 【统计口径】对每个 aspect 的情感得分取均值
+#   情感值范围: -1(消极) ~ 0(中性) ~ 1(积极)
+# 【输出文件】PNG: a2_overall_aspect_sentiment.png, CSV: a2_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_a2_overall_aspect_sentiment(aspect_records: list[dict]):
     """Overall sentiment per aspect.
         各方面总体情感：不区分时段，计算每个方面的平均情感得分。"""
@@ -533,9 +550,18 @@ def dim_a2_overall_aspect_sentiment(aspect_records: list[dict]):
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  A3(ABSA): 节假日 VS 非节假日 方面情感 (Bar)
+#  A3: Holiday vs Non-Holiday Aspect Sentiment
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】双面板柱状图: 左=提及次数对比, 右=情感得分对比
+# 【统计口径】按 period=holiday/non_holiday 分组统计各方面情感均值
+# 【输出文件】PNG: a3_a4_holiday_aspect_sentiment_merged.png, CSV: a3_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_a3_holiday_vs_nonholiday_aspect(aspect_records: list[dict]):
     """Holiday vs non-holiday aspect sentiment comparison.
-       节假日 vs 非节假日方面情感对比。"""
+        节假日 vs 非节假日方面情感对比。"""
     log("=" * 50)
     log("A3: Holiday vs Non-Holiday Aspect Sentiment")
 
@@ -580,9 +606,17 @@ def dim_a3_holiday_vs_nonholiday_aspect(aspect_records: list[dict]):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  A4(ABSA): 节假日 VS 工作日 VS 周末 方面情感
+#  A4: Holiday vs Workday vs Weekend Aspect
+# ═══════════════════════════════════════════════════════════════════════
+# 【统计口径】3组(holiday/workday/weekend) 各方面情感均值对比
+# 【输出文件】CSV: a4_holiday_workday_weekend_aspect.csv (图片已合并到A3)
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_a4_holiday_workday_weekend_aspect(aspect_records: list[dict]):
     """Holiday vs workday vs weekend aspect sentiment.
-       节假日 vs 工作日 vs 周末方面情感。"""
+        节假日 vs 工作日 vs 周末方面情感。"""
     log("=" * 50)
     log("A4: Holiday vs Workday vs Weekend Aspect Sentiment")
 
@@ -621,9 +655,18 @@ def dim_a4_holiday_workday_weekend_aspect(aspect_records: list[dict]):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  A5(ABSA): 各节假日方面情感热力图
+#  A5: Per-Holiday Aspect Sentiment Heatmap
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】热力图: 行=节假日, 列=方面, 值=平均情感得分
+# 【输出文件】PNG: a5_per_holiday_aspect_heatmap.png, CSV: a5_*.csv
+# 【特殊说明】同样输出 vs 非节假日的差值热力图
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_a5_per_holiday_aspect_heatmap(aspect_records: list[dict]):
     """Per-holiday aspect sentiment heatmap.
-       各节假日方面情感热力图：展示每个节假日对各方面的平均情感得分。"""
+        各节假日方面情感热力图：展示每个节假日对各方面的平均情感得分。"""
     log("=" * 50)
     log("A5: Per-Holiday Aspect Sentiment Heatmap")
 

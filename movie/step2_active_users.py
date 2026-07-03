@@ -162,6 +162,27 @@ def _avg_active_users_per_holiday_name(
 #  A: 周周期 - 活跃用户分析
 # ═══════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════
+#  C1: 节假日 VS 非节假日 日均活跃用户数 (Bar)
+#  C1: Holiday vs Non-Holiday Avg Daily Active Users
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】
+#   单柱状图：节假日 vs 非节假日 日均活跃用户数对比
+# 
+# 【统计口径】
+#   活跃用户定义: 某天有提问的用户数（按 user_id 去重）
+#   _avg_daily_active_users(seekers, date_set):
+#     遍历 date_set 中的各天, 计算当天提问的 user_id 数量
+#     → 对所有天数取均值
+# 
+# 【输出文件】
+#   CSV: c1_holiday_vs_nonholiday_active.csv
+#   图片已合并到通用输出中
+# 
+# 【特殊说明】
+#   A组（周周期）的活跃用户分析
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_c1_holiday_vs_nonholiday_active(seekers: list[dict]):
     """Bar chart: avg daily active users, holiday vs non-holiday.
        柱状图：节假日 vs 非节假日 日均活跃用户数对比。"""
@@ -211,6 +232,14 @@ def dim_c1_holiday_vs_nonholiday_active(seekers: list[dict]):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  C2: 节假日 VS 工作日 VS 周末 日均活跃用户数
+#  C2: Holiday vs Workday vs Weekend Avg Daily Active Users
+# ═══════════════════════════════════════════════════════════════════════
+# 【统计口径】同 C1，分组扩展到三组: holiday / workday / weekend
+# 【输出文件】CSV: c2_holiday_workday_weekend_active.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_c2_holiday_workday_weekend_active(seekers: list[dict]):
     """Bar chart: avg daily active users, holiday vs workday vs weekend.
        柱状图：节假日 vs 工作日 vs 周末 日均活跃用户数对比。"""
@@ -256,6 +285,16 @@ def dim_c2_holiday_workday_weekend_active(seekers: list[dict]):
             w.writerow([p, f'{avgs[p]:.2f}'])
     log(f"Saved: {csv_path}")
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  C3: 各节假日 VS 非节假日 日均活跃用户数 (Grouped Bar)
+#  C3: Per-Holiday vs Non-Holiday Avg Daily Active Users
+# ═══════════════════════════════════════════════════════════════════════
+# 【统计口径】节假日按名称聚合，日均活跃用户数 vs 非节假日基线
+#   _aggregate_holiday_users() 辅助函数聚合节假日数据
+#   非节假日基线 = _avg_daily_active_users(seekers, non_holiday_dates)
+# 【输出文件】PNG: c3_c4_per_holiday_active_merged.png, CSV: c3_*.csv
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_c3_per_holiday_vs_nonholiday_active(seekers: list[dict]):
     """Bar chart: each holiday name avg daily active users vs non-holiday.
@@ -318,9 +357,18 @@ def dim_c3_per_holiday_vs_nonholiday_active(seekers: list[dict]):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  C4: 各节假日 VS 工作日/周末 日均活跃用户数 (Grouped Bar)
+#  C4: Per-Holiday vs Workday/Weekend Avg Daily Active Users
+# ═══════════════════════════════════════════════════════════════════════
+# 【统计口径】节假日按名称聚合，对比工作日/周末基线
+# 【输出文件】CSV: c4_per_holiday_vs_workday_weekend_active.csv
+#   图片已合并到 C3 的双面板图中
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_c4_per_holiday_vs_workday_weekend_active(seekers: list[dict]):
     """Bar: each holiday name vs workday/weekend baselines for active users.
-       柱状图：各节假日 vs 工作日/周末 日均活跃用户数对比。"""
+        柱状图：各节假日 vs 工作日/周末 日均活跃用户数对比。"""
     log("=" * 50)
     log("C4: Per-Holiday Active Users vs Workday & Weekend")
 
@@ -383,9 +431,19 @@ def dim_c4_per_holiday_vs_workday_weekend_active(seekers: list[dict]):
 #  B: 小时段活跃用户分析
 # ═══════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════
+#  D1: 节假日 VS 非节假日 逐小时活跃用户数 (Line)
+#  D1: Hourly Active Users: Holiday vs Non-Holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】双面板折线图: 上=holiday vs non-holiday, 下=holiday vs workday vs weekend
+# 【统计口径】24小时段，活跃用户数 = 每小时有提问的用户数
+#   使用 _hourly_active() 辅助函数计算
+# 【输出文件】PNG: d1_d2_hourly_active_merged.png, CSV: d1_*.csv
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_d1_hourly_holiday_vs_nonholiday_active(seekers: list[dict]):
     """Line chart: hourly avg active users, holiday vs non-holiday.
-       折线图：节假日 vs 非节假日 逐小时平均活跃用户数。"""
+        折线图：节假日 vs 非节假日 逐小时平均活跃用户数。"""
     log("=" * 50)
     log("D1: Hourly Active Users - Holiday vs Non-Holiday")
 
@@ -413,9 +471,18 @@ def dim_d1_hourly_holiday_vs_nonholiday_active(seekers: list[dict]):
     log(f"Saved: {csv_path}")
 
 
+# ═══════════════════════════════════════════════════════════════════════
+#  D2: 节假日 VS 工作日 VS 周末 逐小时活跃用户数 (已合并到 D1)
+#  D2: Hourly Active Users: Holiday vs Workday vs Weekend
+# ═══════════════════════════════════════════════════════════════════════
+# 【统计口径】3组(holiday/workday/weekend) × 24小时, CSV 输出
+# 【输出文件】CSV: d2_hourly_active_workday_weekend.csv
+#   图片已合并到 D1
+# ═══════════════════════════════════════════════════════════════════════
+
 def dim_d2_hourly_holiday_workday_weekend_active(seekers: list[dict]):
     """Line chart: hourly avg active users, holiday vs workday vs weekend.
-       折线图：节假日 vs 工作日 vs 周末 逐小时平均活跃用户数。"""
+        折线图：节假日 vs 工作日 vs 周末 逐小时平均活跃用户数。"""
     log("=" * 50)
     log("D2: Hourly Active Users - Holiday vs Workday vs Weekend")
 
@@ -443,6 +510,18 @@ def dim_d2_hourly_holiday_workday_weekend_active(seekers: list[dict]):
                         f'{hourly_data["Weekend"][h]:.4f}'])
     log(f"Saved: {csv_path}")
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  D3: 各节假日逐小时活跃用户差值 Hotmap (vs 非节假日)
+#  D3: Per-Holiday Hourly Active Users Diff from Non-Holiday
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】热力图: 行=节假日, 列=0-23小时, 值=绝对值差值
+# 【统计口径】节假日按名称聚合，_hourly_active_avg() 计算逐小时活跃用户数
+#   差值 = |holiday_hourly_avg - non_holiday_hourly_avg|
+# 【输出文件】PNG: d3_d4_per_holiday_hourly_active_merged.png
+#   CSV: d3_per_holiday_hourly_active_vs_nonholiday.csv
+# 【特殊说明】使用绝对值差值的 symlog 热力图
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_d3_per_holiday_hourly_active_vs_nonholiday(seekers: list[dict]):
     """Heatmap: each holiday name x hour, active users diff from non-holiday.
@@ -506,6 +585,15 @@ def dim_d3_per_holiday_hourly_active_vs_nonholiday(seekers: list[dict]):
             w.writerow([name] + [f'{matrix[i, h]:.4f}' for h in range(24)])
     log(f"Saved: {csv_path}")
 
+
+# ═══════════════════════════════════════════════════════════════════════
+#  D4: 各节假日逐小时活跃用户差值 (vs 工作日/周末, Dual Heatmap)
+#  D4: Per-Holiday Hourly Active Users Diff from Workday & Weekend
+# ═══════════════════════════════════════════════════════════════════════
+# 【图表类型】双热力图: vs 工作日差值 + vs 周末差值
+# 【输出文件】CSV: d4_per_holiday_hourly_active_vs_workday_weekend.csv
+#   图片已合并到 D3
+# ═══════════════════════════════════════════════════════════════════════
 
 def dim_d4_per_holiday_hourly_active_vs_workday_weekend(seekers: list[dict]):
     """Dual heatmap: each holiday hourly active users diff from workday & weekend.
