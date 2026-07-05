@@ -55,25 +55,9 @@ def _annotate_heatmap(ax, data, fmt='.1f', fs=6):
                         fontsize=fs, color='black')
 
 
-# Turn count group buckets
-# 轮次分组桶
-TURN_GROUPS = ['1', '2-5', '5-20', '20-100', '100+']
-
-# Turn count to bucket mapping
-# 轮次数到分桶的映射
-def _turn_count_to_bucket(cnt: int) -> str:
-    """Map a turn count to a group label.
-    将轮次数映射到分组标签。"""
-    if cnt == 1:
-        return '1'
-    elif 2 <= cnt <= 5:
-        return '2-5'
-    elif 5 <= cnt <= 20:
-        return '5-20'
-    elif 20 <= cnt <= 100:
-        return '20-100'
-    else:
-        return '100+'
+# Turn count group buckets (non-overlapping)
+# 轮次分组桶（无重叠边界）
+TURN_GROUPS = ['1', '2-5', '6-20', '21-100', '100+']
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -137,8 +121,8 @@ def _compute_turn_groups(rows: list[dict], dedup: bool = False) -> dict[str, int
     Turn groups (轮次分组):
       '1': 1 turn          （1 轮）
       '2-5': 2-5 turns     （2-5 轮）
-      '5-20': 5-20 turns   （5-20 轮）
-      '20-100': 20-100 turns （20-100 轮）
+      '6-20': 6-20 turns   （6-20 轮）
+      '21-100': 21-100 turns （21-100 轮）
       '100+': 100+ turns   （100 轮以上）
 
     If dedup=True, count unique user questions per session (deduped by content).
@@ -168,9 +152,9 @@ def _compute_turn_groups(rows: list[dict], dedup: bool = False) -> dict[str, int
         elif 2 <= cnt <= 5:
             result['2-5'] += 1
         elif 6 <= cnt <= 20:
-            result['5-20'] += 1
+            result['6-20'] += 1
         elif 21 <= cnt <= 100:
-            result['20-100'] += 1
+            result['21-100'] += 1
         else:
             result['100+'] += 1
     return result

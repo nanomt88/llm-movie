@@ -22,7 +22,8 @@ import os             # 操作系统接口，路径操作
 import re             # 正则表达式，用于文本解析
 import ast            # 抽象语法树，用于解析 Python 字面量
 from collections import defaultdict, Counter  # 默认字典和计数器
-from datetime import datetime, timezone, timedelta  # 日期时间处理
+from datetime import datetime, timedelta  # 日期时间处理
+from zoneinfo import ZoneInfo  # 时区处理（规则3：utc_time 为美国当地时间）
 
 from movie.config import (                      # 从配置模块导入路径和常量
     DATA_DIR, FULL_YEAR_CSV, HOLIDAY_CSV, HOLIDAY_WORKDAY_CSV,
@@ -112,6 +113,7 @@ def parse_processed_text(row: dict) -> str:
     if not raw:                                              # 空值直接返回
         return ''
     # 使用正则匹配 "['USER', 'text']" 格式，提取 text 部分
+    # TODO 这个地方没有提取系统回复，不会有问题吗？
     m = re.search(r"\[\s*'USER'\s*,\s*'(.*)'\s*\]", raw, re.DOTALL)
     if m:
         return m.group(1)                                    # 返回匹配到的文本
@@ -268,8 +270,8 @@ def tag_period(rows: list[dict], holiday_map: dict,
     stats = {'holiday': 0, 'workday': 0, 'weekend': 0}       # 统计各时段数量
 
     for row in rows:                                         # 遍历每一行
-        # 从 UTC 时间戳转换为日期时间对象（UTC 时区）
-        dt = datetime.fromtimestamp(row['utc_time'], tz=timezone.utc)
+        # 从时间戳转换为日期时间对象（美国东部时间，规则3）
+        dt = datetime.fromtimestamp(row['utc_time'], tz=ZoneInfo('America/New_York'))
         date_str = dt.strftime('%Y-%m-%d')                   # 格式化为 YYYY-MM-DD
         row['date'] = date_str                               # 添加日期字段
         row['hour'] = dt.hour                                # 添加小时字段
@@ -370,26 +372,6 @@ def load_user_age_segments() -> dict[str, str]:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  6. Utility: get system replies for a given session
-#  6. 工具函数：获取指定会话的系统回复
-# ═══════════════════════════════════════════════════════════════════════
-
-def get_system_replies_for_session(session_id: str,
-                                   all_rows: list[dict]) -> list[dict]:
-    """Get all system replies (is_seeker=False) for a given session.
-       获取指定会话中所有系统回复行。
-    Args:
-        session_id: 会话基础 ID
-        all_rows:   所有数据行
-    Returns:
-        该会话中 is_seeker=False 的行（即系统回复）列表
-    """
-    # 列表推导：筛选出同一会话且不是提问者的行
-    return [r for r in all_rows
-            if r['session_id'] == session_id and not r['is_seeker']]
-
-
-# ═══════════════════════════════════════════════════════════════════════
 #  7. Validation & summary
 #  7. 验证与摘要
 # ═══════════════════════════════════════════════════════════════════════
@@ -458,6 +440,9 @@ def load_all(max_rows: int = None) -> dict:
     rows = load_conversations(FULL_YEAR_CSV, max_rows=max_rows)
     rows = tag_period(rows, holiday_map, adjustments)
     rows = [r for r in rows if not r['date'].startswith('2018')]  # 过滤 2018 年数据，只保留 2019-2022
+    # 过滤 2019-01-01 元旦 7AM 的数据采集人工产物（719 条集中在一个小时，占比 94%）
+    # rows = [r for r in rows if not (r['date'] == '2019-01-01' and r['hour'] == 7)]
+    rows = [r for r in rows if not (r['date'] == '2019-01-01')]
     seekers = [r for r in rows if r['is_seeker']]            # 筛选出用户提问行
 
     # 4. Movie info（加载电影信息）
