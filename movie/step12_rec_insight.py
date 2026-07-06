@@ -22,8 +22,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
-
 from movie.config import STEP_DIRS, setup_matplotlib, log
+from movie.utils.text import parse_conv_turn
+
 
 setup_matplotlib()
 STEP_OUT = STEP_DIRS[12]
@@ -31,21 +32,6 @@ os.makedirs(STEP_OUT, exist_ok=True)
 
 # ── Module-level cache for full-row scan ───────────────────────────────
 _CONV_SYSTEM_CACHE: dict[tuple[str, str], list[str]] | None = None
-
-
-def _parse_conv_turn(conv_id: str) -> tuple[str, str]:
-    """Parse (session_id, turn_number) from conv_id.
-    从 conv_id 中解析出 (会话ID, 轮次编号)。
-
-    conv_id 格式：{session_id}_{current_turn}/{total_turns}
-    示例：t3_rt7enj_1/14 → ('t3_rt7enj', '1')
-    """
-    if '_' not in conv_id:
-        return (conv_id, '')
-    session_id = conv_id.rsplit('_', 1)[0]
-    turn_part = conv_id.rsplit('_', 1)[1]
-    turn_num = turn_part.split('/')[0] if '/' in turn_part else turn_part
-    return (session_id, turn_num)
 
 
 def _build_conv_system(all_rows: list[dict]) -> dict[tuple[str, str], list[str]]:
@@ -68,7 +54,7 @@ def _build_conv_system(all_rows: list[dict]) -> dict[tuple[str, str], list[str]]
         if not processed:
             continue
         conv_id = row.get('conv_id', '')
-        key = _parse_conv_turn(conv_id)  # (session_id, turn_num)
+        key = parse_conv_turn(conv_id)  # (session_id, turn_num)
         if key not in conv_system:
             conv_system[key] = []
         conv_system[key].append(processed)
@@ -231,7 +217,7 @@ def _build_seeker_genres(
     need_turns = set()
     for r in seekers:
         conv_id = r.get('conv_id', '')
-        need_turns.add(_parse_conv_turn(conv_id))
+        need_turns.add(parse_conv_turn(conv_id))
 
     for key in need_turns:
         system_msgs = conv_system.get(key, [])
@@ -257,7 +243,7 @@ def _build_seeker_genres(
     result = []
     for r in seekers:
         conv_id = r.get('conv_id', '')
-        key = _parse_conv_turn(conv_id)
+        key = parse_conv_turn(conv_id)
         rec = dict(r)
         rec['genres'] = turn_genres_cache.get(key, {'unknown'})
         result.append(rec)

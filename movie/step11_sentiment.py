@@ -33,6 +33,7 @@ matplotlib.use('Agg')   # 非交互式后端（服务器环境）
 import matplotlib.pyplot as plt
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
+from movie.utils.text import tokenize as _shared_tokenize, deduplicate_seekers
 from data_analyzer.sentiment import analyze_batch
 
 # ── 初始化 ──────────────────────────────────────────────────────────
@@ -116,34 +117,11 @@ _S5_STOPWORDS = {
 # ── 数据准备 ────────────────────────────────────────────────────────
 
 def tokenize_simple(text: str) -> list[str]:
-    """Tokenize for keyword analysis (keeps sentiment-carrying words)."""
-    if not text:
-        return []
-    text = text.lower()
-    tokens = re.split(r"[^a-z']+", text)
-    return [t.strip("'") for t in tokens
-            if len(t.strip("'")) > 2
-            and not t.strip("'").isnumeric()
-            and t.strip("'") not in _S5_STOPWORDS]
+    """Tokenize for keyword analysis using shared utility."""
+    return _shared_tokenize(text, stopwords=_S5_STOPWORDS)
 
 
-def deduplicate_seekers(seekers: list[dict]) -> list[dict]:
-    """Deduplicate seeker records by text content (same as step7)."""
-    seen = set()
-    deduped = []
-    for r in seekers:
-        text = r.get('proc_text', '')
-        if not text:
-            text = r.get('raw_text', '')
-        key = (text or '').strip().lower()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        deduped.append(r)
-    n_removed = len(seekers) - len(deduped)
-    if n_removed > 0:
-        log(f"  去重：移除了 {n_removed} 条重复记录（剩余 {len(deduped)} 条）")
-    return deduped
+# deduplicate_seekers is imported from movie.utils.text
 
 
 def annotate_sentiment(seekers: list[dict]) -> list[dict]:

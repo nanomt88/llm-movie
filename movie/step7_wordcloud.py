@@ -27,6 +27,8 @@ matplotlib.use('Agg')                           # 非交互式后端（服务器
 import matplotlib.pyplot as plt
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
+from movie.utils.text import tokenize, deduplicate_seekers
+from movie.utils.plotting import annotate_heatmap
 
 # ── 初始化 ──────────────────────────────────────────────────────────
 setup_matplotlib()
@@ -137,30 +139,13 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
 ALL_STOPWORDS = STOPWORDS | DOMAIN_STOP       # 合并停用词总表
 
 
-def _annotate_heatmap(ax, data, fmt='.1f', fs=6):
-    """在imshow热力图上标注数值"""
-    arr = data.data if isinstance(data, np.ma.MaskedArray) else np.asarray(data)
-    for i in range(arr.shape[0]):
-        for j in range(arr.shape[1]):
-            v = arr[i, j]
-            if not np.isnan(v) and abs(v) > 1e-6:
-                ax.text(j, i, format(float(v), fmt), ha='center', va='center',
-                        fontsize=fs, color='black')
-
-
 # ── 词频计算 ────────────────────────────────────────────────────────
 
 def tokenize(text: str) -> list[str]:
-    """Tokenize text: lowercase, split on non-alpha, remove short words.
-       分词：小写化、按非字母字符分割、去除过短单词和停用词。"""
-    if not text:
-        return []
-    text = text.lower()
-    tokens = re.split(r'[^a-z\']+', text)     # 按非字母/撇号分割
-    return [t.strip("'") for t in tokens
-            if len(t.strip("'")) > 2          # 过滤过短词（≤2字符）
-            and t.strip("'") not in ALL_STOPWORDS  # 排除停用词
-            and not t.strip("'").isnumeric()]       # 排除纯数字
+    """Tokenize text using shared utility function + domain stopwords.
+       分词：使用共享工具 + 领域停用词表。"""
+    from movie.utils.text import tokenize as _tokenize
+    return _tokenize(text, stopwords=ALL_STOPWORDS)
 
 
 def compute_word_freq(seekers: list[dict], date_set: set = None) -> Counter:
@@ -195,30 +180,7 @@ def compute_word_freq_by_period(
     return compute_word_freq(seekers, dates)
 
 
-def deduplicate_seekers(seekers: list[dict]) -> list[dict]:
-    """Deduplicate seeker records by text content (proc_text then raw_text).
-       去除文本内容重复的用户提问记录，避免同一提问被重复计数。
-
-    Keeps the first occurrence of each unique text. Affects all downstream
-    word frequency computations.
-    只保留每条唯一文本的首条记录，影响所有下游词频统计结果。
-    """
-    seen = set()
-    deduped = []
-    for r in seekers:
-        text = r.get('proc_text', '')
-        if not text:
-            text = r.get('raw_text', '')
-        key = (text or '').strip().lower()      # 以标准化后的文本作为去重键
-        if not key or key in seen:
-            continue                            # 跳过重复
-        seen.add(key)
-        deduped.append(r)
-    n_removed = len(seekers) - len(deduped)
-    if n_removed > 0:
-        log(f"  Deduplication: removed {n_removed} duplicate records "
-            f"(left {len(deduped)})")
-    return deduped
+# deduplicate_seekers is imported from movie.utils.text
 
 
 def compute_word_freq_by_holiday(
@@ -787,7 +749,7 @@ def dim_w5_per_holiday_words_heatmap(seekers: list[dict]):
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
     im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-3, vmax=3)
-    _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
+    annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
 
     ax.set_xticks(range(n))
     ax.set_xticklabels(holiday_names, rotation=45, ha='right', fontsize=8)

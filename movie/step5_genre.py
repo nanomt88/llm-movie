@@ -37,24 +37,13 @@ import matplotlib.pyplot as plt  # pyplot 接口，用于绘制图表
 import matplotlib.ticker as ticker  # 坐标轴刻度格式控制
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log  # 导入配置：步骤输出目录、最小数据行数、matplotlib 初始化、日志函数
-from movie.step1_question_freq import (  # 从步骤 1 导入颜色常量
-    COLOR_HOLIDAY, COLOR_NONHOLIDAY, COLOR_WORKDAY, COLOR_WEEKEND,  # 节假日/非节假日/工作日/周末的颜色
-)
+from movie.utils.plotting import (annotate_heatmap,
+                                   COLOR_HOLIDAY, COLOR_NONHOLIDAY,
+                                   COLOR_WORKDAY, COLOR_WEEKEND)  # 统一配色
 
 setup_matplotlib()  # 初始化 matplotlib 样式（字体等）
 STEP_OUT = STEP_DIRS[5]  # 步骤 5 的输出目录路径（output/movie/step5/）
 os.makedirs(STEP_OUT, exist_ok=True)  # 创建输出目录（如果已存在则不报错）
-
-
-def _annotate_heatmap(ax, data, fmt='.1f', fs=6):
-    """在imshow热力图上标注数值"""
-    arr = data.data if isinstance(data, np.ma.MaskedArray) else np.asarray(data)
-    for i in range(arr.shape[0]):
-        for j in range(arr.shape[1]):
-            v = arr[i, j]
-            if not np.isnan(v) and abs(v) > 1e-6:
-                ax.text(j, i, format(float(v), fmt), ha='center', va='center',
-                        fontsize=fs, color='black')
 
 
 TT_PATTERN = re.compile(r'\b(tt\d+)\b')  # 正则：匹配 IMDb 电影 ID（tt 后跟数字，如 tt1234567）
@@ -124,17 +113,7 @@ def _build_seeker_genres(
     返回字典列表，每个字典增加了 'genres' 键。
     每条记录对应该用户提问中提到的每部电影。
     """
-    def _parse_conv_turn(conv_id: str) -> tuple[str, str]:
-        """Parse (session_id, turn_number) from conv_id.
-        从 conv_id 中解析出 (会话ID, 轮次编号)。
-        conv_id 格式：{session_id}_{current_turn}/{total_turns}
-        示例：t3_rt7enj_1/14 → ('t3_rt7enj', '1')"""
-        if '_' not in conv_id:
-            return (conv_id, '')
-        session_id = conv_id.rsplit('_', 1)[0]  # 取最后一个 _ 之前的部分 = 会话ID
-        turn_part = conv_id.rsplit('_', 1)[1]    # 取最后一个 _ 之后的部分 = "1/14"
-        turn_num = turn_part.split('/')[0] if '/' in turn_part else turn_part  # 提取轮次号 "1"
-        return (session_id, turn_num)
+    from movie.utils.text import parse_conv_turn
 
     # Build (session_id, turn_num) -> list of system reply processed fields
     # 构建 (会话ID, 轮次号) -> 系统回复文本列表
@@ -147,13 +126,13 @@ def _build_seeker_genres(
 
         # 只处理系统回复（不是用户提问）
         if not is_seeker and processed:
-            key = _parse_conv_turn(conv_id)  # (session_id, turn_num)
+            key = parse_conv_turn(conv_id)  # (session_id, turn_num)
             conv_system[key].append(processed)
 
     result = []  # 存储增加了影片类型信息的记录
     for r in seekers:  # 遍历每条用户提问记录
         conv_id = r.get('conv_id', '')  # 获取会话 ID
-        key = _parse_conv_turn(conv_id)  # (session_id, turn_num) 精确匹配轮次
+        key = parse_conv_turn(conv_id)  # (session_id, turn_num) 精确匹配轮次
         system_msgs = conv_system.get(key, [])  # 获取同一会话同一轮次的系统回复
 
         # Collect all movie IDs from system replies in this conversation turn
@@ -562,7 +541,7 @@ def dim_j2_holiday_workday_weekend_genre(seeker_genres: list[dict]):
 #         （含每个节假日×类型的日均值，最后一行为 non_holiday_baseline）
 # 
 # 【特殊说明】
-#   - 使用 ax.imshow() 绘制热力图（非 sns.heatmap），通过 _annotate_heatmap 显示数值
+#   - 使用 ax.imshow() 绘制热力图（非 sns.heatmap），通过 annotate_heatmap 显示数值
 #   - 矩阵值 = 节假日日均值 - 非节假日日均值，而非原始值
 #   - CSV 最后一行包含非节假日基线数据，便于比较
 #   - 与 step1 中 A3/A4 的柱状图+基线不同，此处用颜色直观展示偏离程度
@@ -593,7 +572,7 @@ def dim_j2_holiday_workday_weekend_genre(seeker_genres: list[dict]):
 # 
 #   5. 热力图渲染
 #      imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
-#      _annotate_heatmap(ax, matrix, fmt='.1f', fs=6) 标注数值
+#      annotate_heatmap(ax, matrix, fmt='.1f', fs=6) 标注数值
 #      colorbar(label='Avg Daily Mention Diff') 颜色条
 # 
 #   6. CSV 输出
@@ -649,7 +628,7 @@ def dim_j3_per_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
     fig, ax = plt.subplots(figsize=(max(14, len(top_genres) * 0.55), max(6, len(names) * 0.4 + 2)))
     vmax = max(abs(matrix.min()), abs(matrix.max()), 0.01)
     im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
-    _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
+    annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
 
     ax.set_xticks(range(len(top_genres)))
     ax.set_xticklabels(top_genres, rotation=45, ha='right', fontsize=8)
@@ -740,8 +719,8 @@ def dim_j3_per_holiday_vs_nonholiday_genre(seeker_genres: list[dict]):
 #      每个矩阵: len(names) × TOP_N_GENRES
 # 
 #   4. 双面板热力图渲染
-#      上子图 (ax1): imshow(matrix_wd, ...) + _annotate_heatmap
-#      下子图 (ax2): imshow(matrix_we, ...) + _annotate_heatmap
+#      上子图 (ax1): imshow(matrix_wd, ...) + annotate_heatmap
+#      下子图 (ax2): imshow(matrix_we, ...) + annotate_heatmap
 #      各自设置 x/y 轴刻度和标签，颜色条
 #      总标题: 'Per-Holiday Genre Avg Daily Mentions: Diff from Workday & Weekend'
 # 
@@ -805,7 +784,7 @@ def dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres: list[dict]):
 
     vmax1 = max(abs(matrix_wd.min()), abs(matrix_wd.max()), 0.01)
     im1 = ax1.imshow(matrix_wd, cmap='RdBu_r', aspect='auto', vmin=-vmax1, vmax=vmax1)
-    _annotate_heatmap(ax1, matrix_wd, fmt='.1f', fs=6)
+    annotate_heatmap(ax1, matrix_wd, fmt='.1f', fs=6)
     ax1.set_xticks(range(len(top_genres)))
     ax1.set_xticklabels(top_genres, rotation=45, ha='right', fontsize=7)
     ax1.set_yticks(range(len(names)))
@@ -815,7 +794,7 @@ def dim_j4_per_holiday_vs_workday_weekend_genre(seeker_genres: list[dict]):
 
     vmax2 = max(abs(matrix_we.min()), abs(matrix_we.max()), 0.01)
     im2 = ax2.imshow(matrix_we, cmap='RdBu_r', aspect='auto', vmin=-vmax2, vmax=vmax2)
-    _annotate_heatmap(ax2, matrix_we, fmt='.1f', fs=6)
+    annotate_heatmap(ax2, matrix_we, fmt='.1f', fs=6)
     ax2.set_xticks(range(len(top_genres)))
     ax2.set_xticklabels(top_genres, rotation=45, ha='right', fontsize=7)
     ax2.set_yticks(range(len(names)))
@@ -1332,7 +1311,7 @@ def dim_k2_hourly_holiday_workday_weekend_genre(seeker_genres: list[dict]):
 # 【特殊说明】
 #   - 每种类型独立图片，文件名用类型前10字符
 #   - 颜色刻度对称: vmax = max(|matrix.min()|, |matrix.max()|)
-#   - 使用 ax.imshow() 绘制 + _annotate_heatmap() 标注数值
+#   - 使用 ax.imshow() 绘制 + annotate_heatmap() 标注数值
 #   - 与 K4 的区别: K3 使用非节假日基线，K4 分别使用工作日/周末基线
 # 
 # 【代码中处理逻辑】
@@ -1354,7 +1333,7 @@ def dim_k2_hourly_holiday_workday_weekend_genre(seeker_genres: list[dict]):
 #         - 计算该节假日的逐小时数据 h_hourly
 #         - 对每小时 h: matrix[i,h] = h_hourly[g][h] - nh_hourly[g][h]
 #      c) imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
-#      d) _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
+#      d) annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
 #      e) 保存为 k3_genre_{g[:10]}_hourly_heatmap.png
 # 
 #   5. CSV 输出（长格式，所有类型合并）
@@ -1406,7 +1385,7 @@ def dim_k3_per_holiday_hourly_genre(seeker_genres: list[dict]):
         fig, ax = plt.subplots(figsize=(16, max(4, len(names) * 0.3 + 2)))  # 创建图表
         vmax = max(abs(matrix.min()), abs(matrix.max()), 0.01)  # 对称颜色范围的最大绝对值
         im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)  # 绘制热力图，红蓝配色
-        _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
+        annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
 
         ax.set_xticks(range(24))  # x 轴刻度 0-23
         ax.set_xticklabels(range(24), fontsize=8)  # x 轴标签
@@ -1502,8 +1481,8 @@ def dim_k3_per_holiday_hourly_genre(seeker_genres: list[dict]):
 #           matrix_wd[i,h] = h_hourly[g][h] - wd_hourly[g][h]
 #           matrix_we[i,h] = h_hourly[g][h] - we_hourly[g][h]
 #      c) subplots(2, 1) 创建双面板
-#      d) 上面板: imshow(matrix_wd) + _annotate_heatmap
-#      e) 下面板: imshow(matrix_we) + _annotate_heatmap
+#      d) 上面板: imshow(matrix_wd) + annotate_heatmap
+#      e) 下面板: imshow(matrix_we) + annotate_heatmap
 #      f) 各自设置 x/y 轴刻度和颜色条
 #      g) safe_g = g.replace(' ', '_').replace('/', '_')[:10]
 #      h) 保存为 k4_genre_{safe_g}_hourly_heatmap.png
@@ -1566,7 +1545,7 @@ def dim_k4_per_holiday_hourly_genre_vs_workday_weekend(
 
         vmax1 = max(abs(matrix_wd.min()), abs(matrix_wd.max()), 0.01)
         im1 = ax1.imshow(matrix_wd, cmap='RdBu_r', aspect='auto', vmin=-vmax1, vmax=vmax1)
-        _annotate_heatmap(ax1, matrix_wd, fmt='.1f', fs=6)
+        annotate_heatmap(ax1, matrix_wd, fmt='.1f', fs=6)
         ax1.set_xticks(range(24))
         ax1.set_xticklabels(range(24), fontsize=7)
         ax1.set_yticks(range(len(names)))
@@ -1576,7 +1555,7 @@ def dim_k4_per_holiday_hourly_genre_vs_workday_weekend(
 
         vmax2 = max(abs(matrix_we.min()), abs(matrix_we.max()), 0.01)
         im2 = ax2.imshow(matrix_we, cmap='RdBu_r', aspect='auto', vmin=-vmax2, vmax=vmax2)
-        _annotate_heatmap(ax2, matrix_we, fmt='.1f', fs=6)
+        annotate_heatmap(ax2, matrix_we, fmt='.1f', fs=6)
         ax2.set_xticks(range(24))
         ax2.set_xticklabels(range(24), fontsize=7)
         ax2.set_yticks(range(len(names)))

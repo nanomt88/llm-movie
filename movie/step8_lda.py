@@ -36,6 +36,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
+from movie.utils.text import tokenize as _shared_tokenize
 
 # ── 初始化 ──────────────────────────────────────────────────────────
 setup_matplotlib()                      # 配置 matplotlib 中文字体等
@@ -53,15 +54,8 @@ MAX_WORD_FRAC = 0.5     # 词出现在文档中的最大比例（过滤过于通
 def tokenize(text: str) -> list[str]:
     """Simple English tokenizer for LDA.
        面向 LDA 的简单英文分词。"""
-    if not text:            # 空文本直接返回空列表
-        return []
-    text = text.lower()     # 统一转小写
-    tokens = re.split(r"[^a-z']+", text)  # 按非字母/撇号字符分割
-    # 过滤：去除首尾撇号、检查长度、只保留字母词、排除停用词
-    return [t.strip("'") for t in tokens
-            if len(t.strip("'")) >= MIN_WORD_LEN
-            and t.strip("'").isalpha()
-            and t.strip("'") not in _STOPWORDS]
+    # 使用共享分词器，传入自定义停用词和 isalpha 检查
+    return _shared_tokenize(text, min_len=MIN_WORD_LEN, stopwords=_STOPWORDS)
 
 # ── 英文停用词表（含电影领域常见高频词）───────────────────────────
 _STOPWORDS = {

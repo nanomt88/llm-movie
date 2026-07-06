@@ -31,24 +31,13 @@ import matplotlib.pyplot as plt  # pyplot 接口，用于绘制图表
 import matplotlib.ticker as ticker  # 坐标轴刻度格式控制
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, AGE_SEGMENTS, setup_matplotlib, log  # 导入配置：步骤输出目录、最小数据行数、年龄段定义、matplotlib 初始化、日志函数
-from movie.step1_question_freq import (  # 从步骤 1 导入颜色常量
-    COLOR_HOLIDAY, COLOR_NONHOLIDAY, COLOR_WORKDAY, COLOR_WEEKEND,  # 节假日/非节假日/工作日/周末的颜色
-)
+from movie.utils.plotting import (annotate_heatmap,
+                                   COLOR_HOLIDAY, COLOR_NONHOLIDAY,
+                                   COLOR_WORKDAY, COLOR_WEEKEND)  # 统一配色
 
 setup_matplotlib()  # 初始化 matplotlib 样式（字体等）
 STEP_OUT = STEP_DIRS[4]  # 步骤 4 的输出目录路径（output/movie/step4/）
 os.makedirs(STEP_OUT, exist_ok=True)  # 创建输出目录（如果已存在则不报错）
-
-
-def _annotate_heatmap(ax, data, fmt='.1f', fs=6):
-    """在imshow热力图上标注数值"""
-    arr = data.data if isinstance(data, np.ma.MaskedArray) else np.asarray(data)
-    for i in range(arr.shape[0]):
-        for j in range(arr.shape[1]):
-            v = arr[i, j]
-            if not np.isnan(v) and abs(v) > 1e-6:
-                ax.text(j, i, format(float(v), fmt), ha='center', va='center',
-                        fontsize=fs, color='black')
 
 
 # Colors for age segments
@@ -786,7 +775,7 @@ def dim_h4_per_holiday_vs_workday_weekend_age(seekers: list[dict], user_ages: di
 
     vmax1 = max(abs(matrix_wd.min()), abs(matrix_wd.max()), 0.01)
     im1 = ax1.imshow(matrix_wd, cmap='RdBu_r', aspect='auto', vmin=-vmax1, vmax=vmax1)
-    _annotate_heatmap(ax1, matrix_wd, fmt='.1f', fs=6)
+    annotate_heatmap(ax1, matrix_wd, fmt='.1f', fs=6)
     ax1.set_xticks(range(n))
     ax1.set_xticklabels(names, rotation=45, ha='right', fontsize=7)
     ax1.set_yticks(range(len(age_segs_plot)))
@@ -796,7 +785,7 @@ def dim_h4_per_holiday_vs_workday_weekend_age(seekers: list[dict], user_ages: di
 
     vmax2 = max(abs(matrix_we.min()), abs(matrix_we.max()), 0.01)
     im2 = ax2.imshow(matrix_we, cmap='RdBu_r', aspect='auto', vmin=-vmax2, vmax=vmax2)
-    _annotate_heatmap(ax2, matrix_we, fmt='.1f', fs=6)
+    annotate_heatmap(ax2, matrix_we, fmt='.1f', fs=6)
     ax2.set_xticks(range(n))
     ax2.set_xticklabels(names, rotation=45, ha='right', fontsize=7)
     ax2.set_yticks(range(len(age_segs_plot)))
@@ -1008,7 +997,7 @@ def dim_i3_per_holiday_hourly_age_old(seekers: list[dict], user_ages: dict):
         fig, ax = plt.subplots(figsize=(16, max(5, len(group_names) * 0.35 + 2)))  # 创建图表面板
         vmax = max(abs(matrix.min()), abs(matrix.max()), 0.01)  # 计算对称颜色范围的最大绝对值
         im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)  # 绘制热力图，红蓝配色
-        _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
+        annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
 
         ax.set_xticks(range(24))  # x 轴刻度：0-23 小时
         ax.set_xticklabels(range(24), fontsize=8)  # x 轴标签
@@ -1110,7 +1099,7 @@ def dim_i3_per_holiday_hourly_age(seekers: list[dict], user_ages: dict):
     fig_h = max(8, total_rows * 0.28 + 3)
     fig, ax = plt.subplots(figsize=(18, fig_h))
     im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
-    _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
+    annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
 
     ax.set_xticks(range(24))
     ax.set_xticklabels(range(24), fontsize=8)

@@ -35,29 +35,13 @@ import matplotlib.pyplot as plt    # pyplot
 import matplotlib.ticker as ticker # 刻度格式化
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log  # 配置
-from movie.step1_question_freq import (   # 从步骤1复用颜色常量
-    COLOR_HOLIDAY, COLOR_NONHOLIDAY, COLOR_WORKDAY, COLOR_WEEKEND,
-)
+from movie.utils.plotting import (annotate_heatmap,
+                                   COLOR_HOLIDAY, COLOR_NONHOLIDAY,
+                                   COLOR_WORKDAY, COLOR_WEEKEND)  # 统一配色
 
 setup_matplotlib()                         # 初始化 matplotlib（后端+字体）
 STEP_OUT = STEP_DIRS[3]                    # 步骤3输出目录：output/movie/step3/
 os.makedirs(STEP_OUT, exist_ok=True)       # 确保输出目录存在
-
-
-def _annotate_heatmap(ax, data, fmt='.1f', fs=6):
-    """在imshow热力图上标注数值"""
-    arr = data.data if isinstance(data, np.ma.MaskedArray) else np.asarray(data)
-    for i in range(arr.shape[0]):
-        for j in range(arr.shape[1]):
-            v = arr[i, j]
-            if not np.isnan(v) and abs(v) > 1e-6:
-                ax.text(j, i, format(float(v), fmt), ha='center', va='center',
-                        fontsize=fs, color='black')
-
-
-# Turn count group buckets (non-overlapping)
-# 轮次分组桶（无重叠边界）
-TURN_GROUPS = ['1', '2-5', '6-20', '21-100', '100+']
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -603,7 +587,7 @@ def dim_e3_per_holiday_vs_nonholiday_turns(rows: list[dict]):
     )
 
     im1 = ax1.imshow(matrix_nd, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
-    _annotate_heatmap(ax1, matrix_nd, fmt='.1f', fs=6)
+    annotate_heatmap(ax1, matrix_nd, fmt='.1f', fs=6)
     ax1.set_xticks(range(len(TURN_GROUPS)))
     ax1.set_xticklabels(TURN_GROUPS, fontsize=9)
     ax1.set_yticks(range(len(names)))
@@ -614,7 +598,7 @@ def dim_e3_per_holiday_vs_nonholiday_turns(rows: list[dict]):
     fig.colorbar(im1, ax=ax1, shrink=0.6, label='Diff in % points')
 
     im2 = ax2.imshow(matrix_d, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
-    _annotate_heatmap(ax2, matrix_d, fmt='.1f', fs=6)
+    annotate_heatmap(ax2, matrix_d, fmt='.1f', fs=6)
     ax2.set_xticks(range(len(TURN_GROUPS)))
     ax2.set_xticklabels(TURN_GROUPS, fontsize=9)
     ax2.set_xlabel('Turn Group')
@@ -827,7 +811,7 @@ def dim_e4_per_holiday_vs_workday_weekend_turns(rows: list[dict]):
 
         vmax = max(abs(matrix.min()), abs(matrix.max()), 0.1)
         im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
-        _annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
+        annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
         ax.set_xticks(range(len(TURN_GROUPS)))
         ax.set_xticklabels(TURN_GROUPS, fontsize=8)
         ax.set_yticks(range(len(names)))
