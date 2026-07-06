@@ -3,10 +3,10 @@ import os
 
 client = OpenAI(
     # 如果没有配置环境变量，请用阿里云百炼API Key替换：api_key="sk-xxx"
-    api_key="sk-ws-H.EMMIRPP.F9Hw.MEQCICAkZLpOf1Y8Y-YOoiEF0t819Evp5YBQbbBUo0UeKcdFAiBgMjkVdBfKEUi2OoksBa6KDR1FJrlS8AF_qskUllECpA",
-    base_url="https://ws-v2voxi8y4z0jsid8.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
-    # api_key="sk-85aed58c0df049a6945bd066090efd4b",
-    # base_url="https://llm-hsek2qqo6rwkdvwz.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    # api_key="sk-ws-H.EMMIRPP.F9Hw.MEQCICAkZLpOf1Y8Y-YOoiEF0t819Evp5YBQbbBUo0UeKcdFAiBgMjkVdBfKEUi2OoksBa6KDR1FJrlS8AF_qskUllECpA",
+    # base_url="https://ws-v2voxi8y4z0jsid8.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    api_key="sk-85aed58c0df049a6945bd066090efd4b",
+    base_url="https://llm-hsek2qqo6rwkdvwz.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
 )
 messages = [{"role": "user", "content": "你是谁"}]
 completion = client.chat.completions.create(
