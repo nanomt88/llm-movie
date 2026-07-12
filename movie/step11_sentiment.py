@@ -33,7 +33,8 @@ matplotlib.use('Agg')   # 非交互式后端（服务器环境）
 import matplotlib.pyplot as plt
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
-from movie.utils.text import tokenize as _shared_tokenize, deduplicate_seekers
+from movie.utils.text import (tokenize as _shared_tokenize, deduplicate_seekers,
+                               build_conv_system, get_system_movie_ids)
 from data_analyzer.sentiment import analyze_batch
 
 # ── 初始化 ──────────────────────────────────────────────────────────
@@ -587,10 +588,12 @@ def dim_s3_per_holiday(seekers: list[dict]):
 
 def _compute_genre_sentiment(
     seekers_subset: list[dict], movie_info: dict,
+    conv_system: dict = None,
 ) -> dict[str, dict]:
     """Compute average sentiment score per genre for a subset of seekers.
 
-    Uses raw Chinese genre strings from movie_info (same as step5_genre.py).
+    规则8：从系统回复中提取电影ID，关联电影类型与情感得分。
+    Uses raw Chinese genre strings from movie_info.
 
     Returns:
         dict[genre] -> {'score_sum': float, 'count': int, 'avg': float}
@@ -598,7 +601,12 @@ def _compute_genre_sentiment(
     stats = defaultdict(lambda: {'score_sum': 0.0, 'count': 0})
     for r in seekers_subset:
         score = r.get('sentiment_score', 0.0)
-        for tid in r.get('imdb_ids', []):
+        # 规则8：从系统回复获取电影ID
+        if conv_system is not None:
+            tids = get_system_movie_ids(r.get('conv_id', ''), conv_system)
+        else:
+            tids = r.get('imdb_ids', [])
+        for tid in tids:
             info = movie_info.get(tid)
             if info and 'genres' in info:
                 for g in info['genres']:
@@ -621,7 +629,8 @@ def _compute_genre_sentiment(
 # 【输出文件】PNG: s4_genre_sentiment_heatmap.png, CSV: s4_*.csv
 # ═══════════════════════════════════════════════════════════════════════
 
-def dim_s4_genre_by_holiday(seekers: list[dict], movie_info: dict):
+def dim_s4_genre_by_holiday(seekers: list[dict], movie_info: dict,
+                             conv_system: dict = None):
     """Per-holiday genre sentiment difference vs non-holiday baseline.
 
     For each holiday (with sufficient data) and each genre (with sufficient
@@ -642,7 +651,7 @@ def dim_s4_genre_by_holiday(seekers: list[dict], movie_info: dict):
     if not non_holiday:
         log("  No non-holiday data for baseline")
         return
-    base_stats = _compute_genre_sentiment(non_holiday, movie_info)
+    base_stats = _compute_genre_sentiment(non_holiday, movie_info, conv_system)
     # Filter: genres with enough baseline mentions
     base_genres = {g for g, s in base_stats.items() if s['count'] >= MIN_DATA_ROWS}
     if not base_genres:
@@ -674,7 +683,7 @@ def dim_s4_genre_by_holiday(seekers: list[dict], movie_info: dict):
     csv_rows = []
 
     for i, hn in enumerate(holiday_names):
-        h_stats = _compute_genre_sentiment(holiday_groups[hn], movie_info)
+        h_stats = _compute_genre_sentiment(holiday_groups[hn], movie_info, conv_system)
         row = {'holiday': hn, 'count': len(holiday_groups[hn])}
         for j, genre in enumerate(shared_genres):
             base_avg = base_stats[genre]['avg']
@@ -1427,10 +1436,14 @@ def main(data: dict = None):
         data = load_all()
     seekers = data['seekers']
     movie_info = data.get('movie_info', {})
+    rows = data.get('rows', [])
     log(f"已加载 {len(seekers)} 条查询记录")
 
     # 去重
     seekers = deduplicate_seekers(seekers)
+
+    # 规则8：构建系统回复映射表，供 S4 类型情感分析使用
+    conv_system = build_conv_system(rows)
 
     # 执行情感分析并标注到每条记录
     log("正在对查询文本进行情感分析...")
@@ -1450,7 +1463,7 @@ def main(data: dict = None):
     log("")
 
     # S4: 各节假日电影类型情感差异
-    dim_s4_genre_by_holiday(seekers, movie_info)
+    dim_s4_genre_by_holiday(seekers, movie_info, conv_system)
     log("")
 
     # S5: 情感关联关键词

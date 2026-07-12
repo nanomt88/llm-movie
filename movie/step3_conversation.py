@@ -904,14 +904,17 @@ def _session_time_metrics(rows: list[dict],
         if len(questions) < 2:                 # 少于2个提问，无法计算间隔/时长
             continue
 
-        # Deduplicate by content（按内容去重）
-        seen_texts = {}
+        # Deduplicate by (text, utc_time)（按文本+时间组合去重）
+        # 规则11：若两次提问时间均一致，则视为同一问题，不计入
+        seen_keys = set()
         unique_questions = []
         for q in questions:
             text = q.get('proc_text', '') or q.get('raw_text', '')
             text = text.strip()
-            if text and text not in seen_texts:  # 跳过重复内容
-                seen_texts[text] = True
+            utc = q.get('utc_time', 0)
+            key = (text, utc)
+            if text and key not in seen_keys:  # 跳过文本+时间均相同的重复
+                seen_keys.add(key)
                 unique_questions.append(q)
 
         if len(unique_questions) < 2:          # 去重后少于2个，跳过

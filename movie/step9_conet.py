@@ -28,7 +28,7 @@ matplotlib.use('Agg')       # 非交互式后端（服务器环境）
 import matplotlib.pyplot as plt
 
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
-from movie.utils.genre_map import to_en
+from movie.utils.text import build_conv_system, get_system_movie_ids
 
 # ── 初始化 ──────────────────────────────────────────────────────────
 setup_matplotlib()
@@ -57,12 +57,12 @@ GENRE_COLORS = [
 
 def _extract_movie_pairs(seekers: list[dict]) -> list[tuple[str, str]]:
     """Extract movie-movie co-occurrence pairs from seeker records.
-       从用户提问记录中提取电影-电影共现对。
-    Each seeker's IMDB IDs within the same record form a co-occurrence pair.
-    同一记录中的多个 IMDB ID 构成共现对。"""
+        从用户提问记录中提取电影-电影共现对。
+    Each seeker's system-replied movie IDs within the same record form a co-occurrence pair.
+    同一记录中系统回复提及的多个电影 ID 构成共现对（规则8）。"""
     pairs = []
     for r in seekers:
-        ids = r.get('imdb_ids', [])
+        ids = list(r.get('system_movie_ids', set()))  # 从系统回复获取的电影ID
         if len(ids) >= 2:
             sorted_ids = sorted(set(ids))       # 去重排序，避免 (A,B) vs (B,A)
             for a, b in combinations(sorted_ids, 2):
@@ -90,7 +90,7 @@ def _build_cooccurrence_graph(
     for r in seekers:
         if date_set is not None and r['date'] not in date_set:
             continue                        # 按日期过滤
-        ids = r.get('imdb_ids', [])
+        ids = list(r.get('system_movie_ids', set()))  # 从系统回复获取的电影ID
         if not ids:
             continue
         # 统计提及次数（同一记录中每部电影只计一次）
@@ -128,9 +128,8 @@ def _get_genre_color(genres_str: str, genre_color_map: dict) -> str:
         return '#95a5a6'  # 无类型信息时用灰色
     genre_list = [g.strip() for g in genres_str.split(',')]
     for g in genre_list:
-        eng = to_en(g)
-        if eng in genre_color_map:
-            return genre_color_map[eng]
+        if g in genre_color_map:
+            return genre_color_map[g]
     return '#95a5a6'
 
 
@@ -182,11 +181,10 @@ def _plot_network(
         g = H.nodes[n].get('genres', '')
         if g:
             primary = g.split(',')[0].strip()       # 取第一个类型为主要类型
-            eng = to_en(primary)
-            if eng not in genre_color_map:
-                genre_color_map[eng] = GENRE_COLORS[color_idx % len(GENRE_COLORS)]
+            if primary not in genre_color_map:
+                genre_color_map[primary] = GENRE_COLORS[color_idx % len(GENRE_COLORS)]
                 color_idx += 1
-            node_colors.append(genre_color_map[eng])
+            node_colors.append(genre_color_map[primary])
         else:
             node_colors.append('#95a5a6')
 
@@ -529,7 +527,7 @@ def dim_n5_genre_cooccurrence(seekers: list[dict], movie_info: dict):
             info = movie_info.get(mid, {})
             if isinstance(info, dict):
                 gs = info.get('genres', [])
-                genres_per_movie.append([to_en(g) for g in gs if g])
+                genres_per_movie.append([g for g in gs if g])
         # 跨电影生成类型对（同一记录中不同电影的类型之间）
         genre_sets = [set(gs) for gs in genres_per_movie if gs]
         for i in range(len(genre_sets)):
@@ -583,7 +581,14 @@ def main(data: dict = None):
         data = load_all()
     seekers = data['seekers']
     movie_info = data['movie_info']
+    rows = data.get('rows', [])
     log(f"Loaded {len(seekers)} seeker records")
+
+    # 规则8：从系统回复中提取电影ID，附加到每条 seeker 记录
+    conv_system = build_conv_system(rows)
+    for r in seekers:
+        r['system_movie_ids'] = get_system_movie_ids(r.get('conv_id', ''), conv_system)
+    log(f"Built conv_system: {len(conv_system)} turn-level entries")
 
     # N1: 全局共现网络
     G = dim_n1_overall_network(seekers, movie_info)

@@ -107,55 +107,37 @@ def _build_seeker_genres(
 ) -> list[dict]:
     """
     Augment seekers with genre info by matching system replies in the
-    same conversation turn.  Returns list of dicts with 'genre' key added,
-    one entry per seeker x movie_id found.
+    same conversation turn.  Returns list of dicts with 'genres' key added.
     通过匹配同一会话同一轮次中的系统回复，为用户提问记录增加影片类型信息。
-    返回字典列表，每个字典增加了 'genres' 键。
-    每条记录对应该用户提问中提到的每部电影。
+
+    规则8：从系统回复中提取电影ID，在 movie_info.json 中查找电影类型。
+    使用公共函数 build_conv_system / get_system_movie_ids。
     """
-    from movie.utils.text import parse_conv_turn
+    from movie.utils.text import build_conv_system, get_system_movie_ids
 
-    # Build (session_id, turn_num) -> list of system reply processed fields
-    # 构建 (会话ID, 轮次号) -> 系统回复文本列表
-    # 每个系统回复按 (session_id, turn_number) 精确匹配到对应的用户提问
-    conv_system = defaultdict(list)
-    for row in all_rows:
-        conv_id = row.get('conv_id', '')
-        processed = row.get('processed_raw', row.get('processed', ''))
-        is_seeker = row.get('is_seeker', False)
+    # 使用公共函数构建系统回复映射表
+    conv_system = build_conv_system(all_rows)
 
-        # 只处理系统回复（不是用户提问）
-        if not is_seeker and processed:
-            key = parse_conv_turn(conv_id)  # (session_id, turn_num)
-            conv_system[key].append(processed)
+    result = []
+    for r in seekers:
+        conv_id = r.get('conv_id', '')
+        # 规则8：从系统回复中提取电影 ID
+        movie_ids = get_system_movie_ids(conv_id, conv_system)
 
-    result = []  # 存储增加了影片类型信息的记录
-    for r in seekers:  # 遍历每条用户提问记录
-        conv_id = r.get('conv_id', '')  # 获取会话 ID
-        key = parse_conv_turn(conv_id)  # (session_id, turn_num) 精确匹配轮次
-        system_msgs = conv_system.get(key, [])  # 获取同一会话同一轮次的系统回复
-
-        # Collect all movie IDs from system replies in this conversation turn
-        # 收集该会话该轮次系统回复中提到的电影 ID
-        movie_ids = set()  # 使用集合自动去重
-        for msg in system_msgs:  # 遍历每条系统回复（通常只有一条）
-            movie_ids.update(_extract_movie_ids(str(msg)))  # 提取其中的电影 ID 并加入集合
-
-        # Gather genres for these movie IDs
         # 收集这些电影 ID 对应的类型
-        genres_found = set()  # 使用集合自动去重
-        for mid in movie_ids:  # 遍历每部电影
-            info = movie_info.get(mid, {})  # 从电影信息字典中查找该电影的信息
-            if isinstance(info, dict):  # 如果电影信息是字典类型
-                genre_list = info.get('genres', []) or []  # 获取电影类型列表，如果为 None 则取空列表
-                if genre_list:  # 如果有类型信息
-                    genres_found.update(g.strip() for g in genre_list if g.strip())  # 去除空格后加入集合
+        genres_found = set()
+        for mid in movie_ids:
+            info = movie_info.get(mid, {})
+            if isinstance(info, dict):
+                genre_list = info.get('genres', []) or []
+                if genre_list:
+                    genres_found.update(g.strip() for g in genre_list if g.strip())
 
-        rec = dict(r)  # 复制原始记录（避免修改原数据）
-        rec['genres'] = genres_found if genres_found else {'unknown'}  # 如果找到类型则使用，否则标记为 'unknown'
-        result.append(rec)  # 加入结果列表
+        rec = dict(r)
+        rec['genres'] = genres_found if genres_found else {'unknown'}
+        result.append(rec)
 
-    return result  # 返回扩展后的记录列表
+    return result
 
 
 # ── Genre Mention Counter 类型提及统计 ──────────────────────────────────

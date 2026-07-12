@@ -88,7 +88,7 @@ def load_holiday_workday_adjustments() -> dict[str, str]:
             t = row['type'].strip()                          # 调休类型
             if 'substitute workday' in t or '补班' in t:     # 补班：周末改为工作日
                 adjustments[d] = 'workday'
-            elif 'substitute wenkend' in t or '补休' in t:   # 补休：工作日改为休息日
+            elif 'substitute weekend' in t or 'substitute wenkend' in t or '补休' in t:   # 补休：工作日改为休息日
                 adjustments[d] = 'weekend'
     log(f"Loaded {len(adjustments)} workday/weekend adjustments", "DataLoader")
     return adjustments

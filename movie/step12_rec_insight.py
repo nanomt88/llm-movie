@@ -23,7 +23,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from movie.config import STEP_DIRS, setup_matplotlib, log
-from movie.utils.text import parse_conv_turn
+from movie.utils.text import build_conv_system, get_system_movie_ids
 
 
 setup_matplotlib()
@@ -31,36 +31,20 @@ STEP_OUT = STEP_DIRS[12]
 os.makedirs(STEP_OUT, exist_ok=True)
 
 # ── Module-level cache for full-row scan ───────────────────────────────
-_CONV_SYSTEM_CACHE: dict[tuple[str, str], list[str]] | None = None
+_CONV_SYSTEM_CACHE: dict[str, list[str]] | None = None
 
 
-def _build_conv_system(all_rows: list[dict]) -> dict[tuple[str, str], list[str]]:
-    """Build (session_id, turn_num) -> list of system reply processed_raw texts.
+def _build_conv_system(all_rows: list[dict]) -> dict[str, list[str]]:
+    """Cached wrapper around build_conv_system.
+    公共函数 build_conv_system 的缓存包装器。
 
-    Uses turn-level keys so each seeker only gets the system reply from the
-    same turn, avoiding cross-turn genre contamination.
     Cached at module level so N1 and N2 don't each scan 1.6M rows.
     """
     global _CONV_SYSTEM_CACHE
     if _CONV_SYSTEM_CACHE is not None:
         return _CONV_SYSTEM_CACHE
-
-    conv_system: dict[tuple[str, str], list[str]] = {}
-    for row in all_rows:
-        is_seeker = row.get('is_seeker', False)
-        if is_seeker:
-            continue
-        processed = row.get('processed_raw', row.get('processed', ''))
-        if not processed:
-            continue
-        conv_id = row.get('conv_id', '')
-        key = parse_conv_turn(conv_id)  # (session_id, turn_num)
-        if key not in conv_system:
-            conv_system[key] = []
-        conv_system[key].append(processed)
-
-    _CONV_SYSTEM_CACHE = conv_system
-    return conv_system
+    _CONV_SYSTEM_CACHE = build_conv_system(all_rows)
+    return _CONV_SYSTEM_CACHE
 
 
 # ── Color scheme (consistent with previous steps) ──────────────────────
@@ -209,25 +193,26 @@ def _build_seeker_genres(
     # Phase 1: Get system replies from cache (avoids re-scanning 1.6M rows)
     conv_system = _build_conv_system(all_rows)
 
-    # Phase 2: Pre-compute genres per turn (cache, not per-seeker)
-    tt_pattern = re.compile(r'\b(tt\d+)\b')
-    turn_genres_cache: dict[tuple[str, str], set[str]] = {}
+    # Phase 2: Pre-compute genres per conv_id (cache, not per-seeker)
+    turn_genres_cache: dict[str, set[str]] = {}
 
-    # Collect all unique (session_id, turn_num) keys from seekers first
-    need_turns = set()
+    # Collect all unique conv_ids from seekers first
+    need_conv_ids = set()
     for r in seekers:
         conv_id = r.get('conv_id', '')
-        need_turns.add(parse_conv_turn(conv_id))
+        if conv_id:
+            need_conv_ids.add(conv_id)
 
-    for key in need_turns:
-        system_msgs = conv_system.get(key, [])
+    for conv_id in need_conv_ids:
+        system_msgs = conv_system.get(conv_id, [])
         if not system_msgs:
-            turn_genres_cache[key] = {'unknown'}
+            turn_genres_cache[conv_id] = {'unknown'}
             continue
 
+        # 从系统回复中提取电影 ID
         movie_ids = set()
         for msg in system_msgs:
-            movie_ids.update(tt_pattern.findall(str(msg)))
+            movie_ids.update(re.findall(r'\b(tt\d{7,9})\b', str(msg)))
 
         genres_found = set()
         for mid in movie_ids:
@@ -237,15 +222,14 @@ def _build_seeker_genres(
                 if genre_list:
                     genres_found.update(g.strip() for g in genre_list if g.strip())
 
-        turn_genres_cache[key] = genres_found if genres_found else {'unknown'}
+        turn_genres_cache[conv_id] = genres_found if genres_found else {'unknown'}
 
     # Phase 3: Assign cached genres to each seeker
     result = []
     for r in seekers:
         conv_id = r.get('conv_id', '')
-        key = parse_conv_turn(conv_id)
         rec = dict(r)
-        rec['genres'] = turn_genres_cache.get(key, {'unknown'})
+        rec['genres'] = turn_genres_cache.get(conv_id, {'unknown'})
         result.append(rec)
     return result
 
@@ -337,7 +321,7 @@ def _plot_intent_period_heatmap(
         log("No data for intent-period heatmap", "Step12")
         return
 
-    fig, ax = plt.subplots(figsize=(9, 4))
+    fig, ax = plt.subplots(figsize=(9, 4), constrained_layout=True)
     im = ax.imshow(matrix, aspect='auto', cmap='YlOrRd')
 
     for i in range(len(periods)):
@@ -353,7 +337,6 @@ def _plot_intent_period_heatmap(
     ax.set_title('Query Intent × Period (% of queries)', fontsize=12, fontweight='bold')
     fig.colorbar(im, ax=ax, shrink=0.8, label='% of queries in period')
 
-    fig.tight_layout()
     path = os.path.join(STEP_OUT, filename)
     fig.savefig(path, dpi=150, bbox_inches='tight')
     plt.close(fig)
@@ -499,7 +482,7 @@ def _plot_sentiment_genre_heatmap(
 
     fig_h = max(4, len(genre_names) * 0.3 + 2)
     fig_w = max(6, len(sentiment_order) * 1.5 + 3)
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), constrained_layout=True)
 
     im = ax.imshow(matrix.T, aspect='auto', cmap='YlOrRd')
     # Normalize each row (sentiment) to % for fair comparison
@@ -522,7 +505,6 @@ def _plot_sentiment_genre_heatmap(
     ax.set_title(f'Sentiment × Genre Affinity – {period.capitalize()}', fontsize=11, fontweight='bold')
     fig.colorbar(im, ax=ax, shrink=0.8, label='Raw mention count')
 
-    fig.tight_layout()
     path = os.path.join(STEP_OUT, filename)
     fig.savefig(path, dpi=150, bbox_inches='tight')
     plt.close(fig)
@@ -554,7 +536,8 @@ def _plot_sentiment_genre_comparison(
         row_sums = np.where(row_sums == 0, 1, row_sums)
         return mat / row_sums * 100
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, max(5, n_genres * 0.3 + 2)))
+    fig, axes = plt.subplots(1, 2, figsize=(16, max(5, n_genres * 0.3 + 2)),
+                              constrained_layout=True)
 
     for idx, (mat, title, ax) in enumerate([
         (holiday_matrix, 'Holiday', axes[0]),
@@ -578,7 +561,6 @@ def _plot_sentiment_genre_comparison(
 
     fig.colorbar(im, ax=axes, shrink=0.6, label='% within sentiment')
     fig.suptitle('Genre Preference by Sentiment: Holiday vs Baseline', fontsize=13, fontweight='bold', y=1.02)
-    fig.tight_layout()
     path = os.path.join(STEP_OUT, filename)
     fig.savefig(path, dpi=150, bbox_inches='tight')
     plt.close(fig)
