@@ -23,6 +23,8 @@ python -m movie.pipeline --skip 4
 
 ## 架构
 
+### `movie/` — 主分析包（12 步流水线）
+
 - `movie/config.py` — 路径、常量（`STEP_DIRS`、`AGE_SEGMENTS`）、
   `setup_matplotlib()`、`log()`。
 - `movie/data_loader.py` — `load_all()` 加载全部数据并返回 dict。
@@ -35,6 +37,19 @@ python -m movie.pipeline --skip 4
   `parse_conv_turn()`。
 - `movie/utils/genre_map.py` — 电影类型中文→英文映射（`GENRE_CN_TO_EN`、
   `to_en()`）。
+
+### `data_analyzer/` — 独立分析包
+
+- 有自己的 `pipeline.py`、`config.py`、`step1–4` 模块。
+- **`movie/step11_sentiment.py` 跨包依赖它**：
+  `from data_analyzer.sentiment import analyze_batch`。
+- `data_analyzer/sentiment.py` 依赖外部库 `vaderSentiment` 和 `afinn`
+  （VADER + AFINN 混合情感分析）。
+
+### 其他目录
+
+- `src/` — 旧代码/实验脚本，非主流水线入口。
+- 根目录散落脚本（`age_segment.py`、`fetch_movie_ids.py` 等）为独立工具脚本。
 
 ## 容易遗漏的约定
 
@@ -63,6 +78,7 @@ python -m movie.pipeline --skip 4
 - Python 3.10（项目目标版本，无 `pyproject.toml` / `requirements.txt`）。
 - `numpy`、`matplotlib`、`wordcloud`、`gensim`、`scikit-learn`（从 step
   文件的 import 推得）。
+- `vaderSentiment`、`afinn`（`data_analyzer/sentiment.py` 使用，Step 11 依赖）。
 
 ## 代码风格
 

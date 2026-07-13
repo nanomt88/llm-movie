@@ -43,6 +43,9 @@ setup_matplotlib()                         # 初始化 matplotlib（后端+字�
 STEP_OUT = STEP_DIRS[3]                    # 步骤3输出目录：output/movie/step3/
 os.makedirs(STEP_OUT, exist_ok=True)       # 确保输出目录存在
 
+# ── 轮次分组定义 ──────────────────────────────────────────────────────
+TURN_GROUPS = ['1', '2-5', '6-20', '21-100', '100+']
+
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Helper: classify session period (by its first user question)
