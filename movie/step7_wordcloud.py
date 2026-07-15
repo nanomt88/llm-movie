@@ -123,18 +123,104 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                 'thett', 'andtt', 'mitt', 'mett', 'nm',
                 'njan', 'ndas', 'nhit', 'nsee', 'nnothing',
                 'nband', 'npiece', 'npart', 'nage', 'nworld',
+                'nhttps', 'nbut', 'nthis', "ni'm", "ni've", 'ttt',
                 # ── 带撇号的缩写（会漏过分词器）──
                 "i'm", "i've", "it's", "don't", "can't", "won't",
                 "didn't", "doesn't", "isn't", "aren't", "that's",
                 "you're", "they're", "there's", "here's", "what's",
                 "wasn't", "couldn't", "wouldn't", "shouldn't",
-                "haven't", "hasn't", "hadn't",
+                "haven't", "hasn't", "hadn't", "i'll", "i'd", "year's",
                 # ── 无语义偏好的通用词 ──
                 'feel', 'etc', 'letterboxd',
                 'web', 'context', 'source', 'medium',
                 'recently', 'advance', 'main',
                 'example', 'examples', 'comments', 'request',
-                }
+                # ── 流媒体平台/网站名（非推荐信号）──
+                'netflix', 'youtube', 'hulu', 'amazon', 'prime', 'disney',
+                'imdb', 'wikipedia', 'wiki', 'hollywood', 'streaming',
+                # ── 通用填充词/语气词 ──
+                'similar', 'check', 'list', 'ones', 'sure', 'right',
+                'kinda', 'wow', 'hey', 'sorry', 'welcome', 'whatever',
+                'anyway', 'obviously', 'exactly', 'particularly',
+                'necessarily', 'completely', 'specifically', 'especially',
+                'personally', 'tho', 'damn', 'fucking', 'shit', 'hell',
+                'cool', 'nice', 'fine', 'happy', 'sad', 'course',
+                'ill', 'non', 'bonus',
+                # ── 通用动词（无偏好信号）──
+                'put', 'come', 'getting', 'seem', 'gets', 'came', 'fit',
+                'comes', 'making', 'doing', 'started', 'happens', 'happen',
+                'become', 'follow', 'following', 'share', 'explain',
+                'knows', 'happened', 'saying', 'mention', 'mentioned',
+                'called', 'adding', 'added', 'ask', 'asking', 'leave',
+                'reading', 'talking', 'search', 'finding', 'remember',
+                'forgot', 'hear', 'heard', 'sounds', 'seems', 'feels',
+                'felt', 'thinking', 'understand', 'believe', 'consider',
+                'pick', 'wait', 'hoping', 'wanting', 'works', 'stop',
+                'start', 'agree', 'removed', 'keep', 'point', 'sort',
+                'prefer', 'preferably', 'appreciate', 'appreciated',
+                'open', 'add',
+                # ── 通用名词（无类型信号）──
+                'others', 'reason', 'matter', 'fact', 'case', 'idea',
+                'ideas', 'sense', 'name', 'line', 'lines', 'side',
+                'category', 'level', 'job', 'taste', 'quality',
+                'opinion', 'perspective', 'situation', 'attention',
+                'problem', 'question', 'chance', 'moment', 'moments',
+                'week', 'country', 'city', 'town', 'world', 'home',
+                'house', 'room', 'school', 'friend', 'friends', 'wife',
+                'men', 'women', 'boy', 'girl', 'kid', 'kids', 'parents',
+                'relationship',
+                # ── 通用形容词/副词（无类型信号）──
+                'long', 'big', 'short', 'small', 'high', 'low', 'full',
+                'entire', 'whole', 'certain', 'particular', 'specific',
+                'general', 'personal', 'real', 'realistic', 'true',
+                'actual', 'multiple', 'single', 'half', 'early', 'late',
+                'lately', 'currently', 'past', 'future', 'recent',
+                'modern', 'older', 'young', 'fast', 'slow', 'easy',
+                'hard', 'deep', 'close', 'huge', 'crazy', 'wrong',
+                # ── 电影/平台元词 ──
+                'series', 'episode', 'episodes', 'season', 'seasons',
+                'trailer', 'trilogy', 'reviews', 'rec', 'recs', 'ref',
+                'comment', 'listed', 'description', 'subtitles', 'binge',
+                # ── 时间/季节词（非类型信号）──
+                'april', 'june', 'autumn', 'sept', 'today', 'tonight',
+                # ── 国籍/语言（非类型信号）──
+                'american', 'english', 'french', 'japanese', 'korean',
+                # ── 极低频噪音（编码残留/极罕见人名）──
+                'wordsextra', 'urxf', 'gcrd', 'seligman', 'noblewoman',
+                'nymphomaniac', 'gainsbourg', 'champion', 'boot',
+                # ── W4 CSV 中新增噪音词 ──
+                # 编码残留（ratio > 1000 且 non_holiday_avg ≈ 0）
+                'domina', 'balrog', 'droplabs', 'batista', 'demille',
+                'cornfield', 'otto', 'alteration', 'serp', 'gws', 'rlz',
+                'enus', 'mtt', 'tik', 'jpg', 'rly', 'nhappy', 'njane',
+                'crazed', 'mongols', 'wyatt', 'hobo', 'knockoffs',
+                # 论坛缩写/俚语
+                'reco', 'thx', 'umm', 'serie',
+                # 月份/星期（非类型信号）
+                'dec', 'oct', 'feb', 'august', 'sunday', 'saturday',
+                'monday', 'friday', 'thursday', 'tuesday', 'wednesday',
+                # 地名（非类型信号）
+                'texas', 'rome', 'greece', 'detroit', 'york', 'pacific',
+                # 人名（非通用推荐信号）
+                # 'neil', 'leslie', 'charlotte', 'bruno', 'hepburn', 'lars',
+                # 'cary', 'jordan', 'reynolds', 'ruffalo', 'campbell',
+                # 'churchill', 'norris', 'wayne', 'jerry', 'connor',
+                # 通用名词（无类型偏好）
+                'extended', 'edition', 'accurate', 'deserved', 'definition',
+                'intention', 'teaching', 'incident', 'officer', 'articles',
+                'table', 'field', 'poll', 'articles', 'native', 'wedding',
+                'holiday', 'holidays', 'values', 'lessons', 'morning',
+                'eight', 'sharing', 'disagree', 'replaced', 'mentor',
+                 'mansion', 'bike', 'cinephiles',
+                'library', 'elevator', 'gateway', 'cartel',
+                'chocolate', 'cat', 'trans', 'anti', 'file',
+                'surveillance', 'chainsaw', 'wolfenstein', 'synecdoche',
+                'somthing', 'vonnegut', 'memorial', 'station', 'grant',
+                'eleven',  'professor', 'captivating', 'disagree', 'summer',
+                'sibling', 'blue',
+                # 'relaxing', 'intelligent', 'angry', 'muscular', 'honey','struck', 'scheming', 'infidelity',
+                # 'love', 'loved', 'celebrate', 'desire','fight','negotiation','puzzles',
+               }
 
 ALL_STOPWORDS = STOPWORDS | DOMAIN_STOP       # 合并停用词总表
 
@@ -559,11 +645,32 @@ def dim_w4_per_holiday_words(seekers: list[dict], top_n: int = 30):
         for hn in holiday_names:
             ha = holiday_avg[hn].get(w, 0)
             if ha > 0:
-                ratio = min(holiday_ratio[hn].get(w, 1), 20)   # 倍数封顶 20
+                ratio = min(holiday_ratio[hn].get(w, 1), 20)
                 max_score = max(max_score, ha * ratio)
         if max_score > 0:
             word_score[w] = max_score
-    sorted_words = sorted(word_score, key=word_score.get, reverse=True)[:500]
+
+    # 每个节假日 top 100 + 非节假日 top 100 的并集
+    csv_top_n = 100
+    selected_words = set()
+
+    # 各节假日 top 100（按该节假日的日均词频×倍数排序）
+    for hn in holiday_names:
+        scored = []
+        for w, ha in holiday_avg[hn].items():
+            ratio = min(holiday_ratio[hn].get(w, 1), 20)
+            scored.append((w, ha * ratio))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        for w, _ in scored[:csv_top_n]:
+            selected_words.add(w)
+
+    # 非节假日 top 100（按日均词频排序）
+    nh_scored = sorted(nh_avg.items(), key=lambda x: x[1], reverse=True)
+    for w, _ in nh_scored[:csv_top_n]:
+        selected_words.add(w)
+
+    # 并集按全局得分排序
+    sorted_words = sorted(selected_words, key=lambda w: word_score.get(w, 0), reverse=True)
 
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         cw = csv.writer(f)
@@ -578,7 +685,7 @@ def dim_w4_per_holiday_words(seekers: list[dict], top_n: int = 30):
                 hr = holiday_ratio[hn].get(word, 0)
                 row.extend([f'{ha:.4f}', f'{hr:.2f}'])
             cw.writerow(row)
-    log(f"Saved: {csv_path}")
+    log(f"Saved: {csv_path} ({len(sorted_words)} words)")
 
     # ── 各节假日柱状图（每个节假日一个子图）──
     n_cols = min(4, n_holidays)
