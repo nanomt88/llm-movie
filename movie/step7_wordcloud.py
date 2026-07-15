@@ -124,6 +124,27 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                 'njan', 'ndas', 'nhit', 'nsee', 'nnothing',
                 'nband', 'npiece', 'npart', 'nage', 'nworld',
                 'nhttps', 'nbut', 'nthis', "ni'm", "ni've", 'ttt',
+                'njane', 'ncomedy', 'nwhen', 'nall', 'nthese', 'nhappy',
+                'nthese', 'njan', 'nfeb', 'nmar', 'napr', 'nmay', 'njun',
+                'njul', 'naug', 'nsep', 'noct', 'nnov', 'ndec',
+                'chntb', 'cneon', 'sxsrf', 'sclient', 'htt',
+                'mozambique', 'nellie', 'giphy', 'wiz', 'doo',
+                'elgort', 'gandalf', 'vonnegut', 'rainforest', 'smoked',
+                'aboriginal', 'hispanic', 'eden', 'flame', 'heaps',
+                'thailand', 'january', 'trips', 'cells', 'hostage',
+                'outdoors', 'disabled', 'bite', 'holds', 'stood',
+                'pressure', 'encounters', 'palette', 'healthy', 'dystopia',
+                'paranoia', 'goosebumps', 'betrayal', 'nicolas', 'murray',
+                'spring', 'danger', 'state', 'trend', 'theater',
+                'race', 'tracks', 'tall', 'mainstream', 'ups',
+                'wilson', 'jumpscare', 'define', 'despair', 'bigger',
+                'giant', 'birthday', 'scares', 'faith', 'approach',
+                'stalin', 'soderbergh', 'miyazaki', 'downey', 'mendes',
+                'passengers', 'concentration', 'pursuit', 'elizabeth',
+                'nightclub', 'adjacent', 'wicked', 'objective', 'orphan',
+                'neighbor', 'nurse', 'testing', 'camps', 'despair',
+                'geniuses', 'duology', 'progressive', 'partly',
+                'sclient', 'surgeries', 'outbreak', 'watcht',
                 # ── 带撇号的缩写（会漏过分词器）──
                 "i'm", "i've", "it's", "don't", "can't", "won't",
                 "didn't", "doesn't", "isn't", "aren't", "that's",
@@ -216,10 +237,28 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                 'chocolate', 'cat', 'trans', 'anti', 'file',
                 'surveillance', 'chainsaw', 'wolfenstein', 'synecdoche',
                 'somthing', 'vonnegut', 'memorial', 'station', 'grant',
-                'eleven',  'professor', 'captivating', 'disagree', 'summer',
-                'sibling', 'blue',
-                # 'relaxing', 'intelligent', 'angry', 'muscular', 'honey','struck', 'scheming', 'infidelity',
-                # 'love', 'loved', 'celebrate', 'desire','fight','negotiation','puzzles',
+                'eleven', 'professor', 'captivating', 'disagree', 'summer',
+                'sibling', 'blue', 'relaxing', 'intelligent', 'angry',
+                'muscular', 'honey', 'struck', 'scheming', 'infidelity',
+                'love', 'loved', 'celebrate', 'desire', 'fight',
+                'negotiation', 'puzzles',
+                # ── 节假日自指词（非推荐信号）──
+                'christmas', 'halloween', 'thanksgiving', 'merry',
+                'valentines', 'valentine', 'easter', 'hanukkah',
+                'holiday', 'holidays',
+                # ── 人名（演员/导演/角色）──
+                'neil', 'leslie', 'charlotte', 'holmes', 'von', 'joe',
+                'hepburn', 'cary', 'reynolds', 'ruffalo', 'campbell',
+                'churchill', 'norris', 'wayne', 'jerry', 'connor',
+                'mendes', 'downey', 'soderbergh', 'miyazaki', 'nicolas',
+                'murray', 'bruno', 'jordan', 'lars', 'trier',
+                # ── 特定电影名（非通用偏好信号）──
+                'spiderman', 'enola', 'gladiator', 'lego', 'atmos',
+                'ranked', 'kong', 'godzilla', 'werewolf',
+                # ── 活动词 ──
+                'camping', 'cake',
+                # ── 历史/政治/社会词 ──
+                'nazi', 'genocide', 'racist', 'politics', 'stalin',
                }
 
 ALL_STOPWORDS = STOPWORDS | DOMAIN_STOP       # 合并停用词总表
@@ -907,9 +946,8 @@ def dim_w5_per_holiday_words_heatmap(seekers: list[dict]):
 
 # 类型倾向词汇
 _GENRE_WORDS = {
-    'Horror':     {'horror', 'scary', 'creepy', 'scared', 'frightening',
-                   'terrifying', 'spooky', 'ghost', 'haunted', 'haunting',
-                   'paranormal', 'supernatural', 'slasher', 'gore', 'slashers',
+    'Horror':     {'horror', 'creepy', 'spooky', 'ghost', 'haunted', 'haunting',
+                   'paranormal', 'slasher', 'gore', 'slashers',
                    'scariest', 'horrifying', 'demonic', 'possession', 'zombie',
                    'zombies', 'vampire', 'vampires', 'werewolf'},
     'Comedy':     {'comedy', 'comedies', 'funny', 'humor', 'hilarious',
@@ -1100,6 +1138,7 @@ def dim_w6_holiday_viewing_profile(seekers: list[dict]):
         # 对各分类组评分
         profile_parts = []
         profile_data = {'holiday': hn_short}
+        max_score_all = 0  # 记录所有分类的最高得分
 
         for group_name, cat_map in cat_groups.items():
             scores = _score_categories(elevated, cat_map)
@@ -1109,11 +1148,18 @@ def dim_w6_holiday_viewing_profile(seekers: list[dict]):
                 for rank, (cat, score) in enumerate(top3, 1):
                     profile_data[f'{group_name}_top{rank}'] = cat
                     profile_data[f'{group_name}_top{rank}_score'] = round(score, 1)
+                    if score > max_score_all:
+                        max_score_all = score
                 profile_parts.append(f"{group_name}: {', '.join(c for c, _ in top3)}")
             else:
                 for rank in range(1, 4):
                     profile_data[f'{group_name}_top{rank}'] = ''
                     profile_data[f'{group_name}_top{rank}_score'] = 0.0
+
+        # 最低得分阈值：所有分类最高得分 < 3 则跳过（数据量不足，画像不可靠）
+        if max_score_all < 3:
+            log(f"  ── {hn_short} ── (skipped: max score {max_score_all:.1f} < 3, insufficient data)")
+            continue
 
         # 收集匹配的关键词实例（用于提供上下文）
         matched_keywords = []
@@ -1167,6 +1213,23 @@ def main(data: dict = None, ratio_threshold: float = 1.5):
     seekers = data['seekers']
     log(f"Loaded {len(seekers)} seeker records")
     seekers = deduplicate_seekers(seekers)               # 先去重
+
+    # ── 关键日志：各节假日去重后用户提问数统计 ──
+    # 同一会话中提问内容一致的已通过 deduplicate_seekers 去重
+    holiday_counts = defaultdict(int)
+    nh_count = 0
+    for r in seekers:
+        if r['is_holiday']:
+            name = r.get('holiday_name', '')[:8]
+            holiday_counts[name] += 1
+        else:
+            nh_count += 1
+    log("── 节假日去重后用户提问数统计 ──")
+    log(f"  非节假日提问总数: {nh_count}")
+    for hn in sorted(holiday_counts.keys()):
+        log(f"  {hn}: {holiday_counts[hn]}")
+    log(f"  节假日提问总计: {sum(holiday_counts.values())}")
+    log("────────────────────────────")
 
     dim_w1_overall_wordcloud(seekers)                    # W1: 全局词云
     log("")
