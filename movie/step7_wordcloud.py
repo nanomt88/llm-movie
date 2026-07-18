@@ -16,6 +16,7 @@ Output: output/movie/step7/*.png + CSV
 import os               # 文件路径操作
 import csv              # CSV 读写
 import re               # 正则表达式，用于分词
+import math             # 数学函数（log2）
 import string           # 字符串工具
 from collections import Counter, defaultdict   # 计数器与默认字典
 
@@ -146,7 +147,7 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                 'geniuses', 'duology', 'progressive', 'partly',
                 'sclient', 'surgeries', 'outbreak', 'watcht',
                 # ── 带撇号的缩写（会漏过分词器）──
-                "i'm", "i've", "it's", "don't", "can't", "won't",
+                "i'm", "i've", "it's", "don't", "can't", "won't","he's"
                 "didn't", "doesn't", "isn't", "aren't", "that's",
                 "you're", "they're", "there's", "here's", "what's",
                 "wasn't", "couldn't", "wouldn't", "shouldn't",
@@ -292,6 +293,9 @@ def compute_word_freq(seekers: list[dict], date_set: set = None) -> Counter:
             text = r.get('raw_text', '')
         tokens = tokenize(text)
         counter.update(tokens)                  # 累加词频
+    # 最低词频过滤：移除总频次 < 3 的极低频词（噪音/偶然提及）
+    MIN_TF = 3
+    counter = Counter({w: c for w, c in counter.items() if c >= MIN_TF})
     return counter
 
 
@@ -419,6 +423,9 @@ def plot_holiday_elevated_words(
         threshold: 比值阈值（默认 1.5 倍）
         top_n: 展示前 N 个词"""
     candidates = []
+    # 地板值：非节假日最小非零日均值，避免零出现时倍数膨胀
+    nh_nonzero = [v for v in nh_avg.values() if v > 0]
+    FLOOR = min(nh_nonzero) if nh_nonzero else 0.01
     for w, h_val in h_avg.items():
         nh_val = nh_avg.get(w, 0)
         if h_val > nh_val * threshold:                 # 超过阈值才入选
@@ -460,7 +467,7 @@ def plot_holiday_elevated_words(
     # 在日志中打印 top 10 及其具体比值
     log(f"  Top holiday-elevated words (avg daily, threshold={threshold}):")
     for w, hv, nhv in top[:10]:
-        ratio = hv / max(nhv, 0.001)
+        ratio = hv / max(nhv, FLOOR)
         log(f"    {w}: holiday={hv:.2f}, non-holiday={nhv:.2f}, ratio={ratio:.1f}x")
 
 
@@ -560,6 +567,9 @@ def dim_w2_holiday_vs_nonholiday_words(seekers: list[dict], ratio_threshold: flo
 
     h_avg = {w: c / max(len(h_dates), 1) for w, c in h_freq.items()}
     nh_avg = {w: c / max(len(nh_dates), 1) for w, c in nh_freq.items()}
+    # 地板值：非节假日最小非零日均值，避免零出现时倍数膨胀
+    nh_nonzero = [v for v in nh_avg.values() if v > 0]
+    FLOOR = min(nh_nonzero) if nh_nonzero else 0.01
 
     plot_top_words_bar(
         {'Holiday': h_avg, 'Non-holiday': nh_avg},
@@ -575,7 +585,7 @@ def dim_w2_holiday_vs_nonholiday_words(seekers: list[dict], ratio_threshold: flo
     log("  Top holiday-specific words (ratio > 2x baseline):")
     ratio_words = []
     for w in h_freq:
-        ratio = h_avg.get(w, 0) / max(nh_avg.get(w, 0.001), 0.001)
+        ratio = h_avg.get(w, 0) / max(nh_avg.get(w, 0), FLOOR)
         if ratio > 2.0 and h_freq[w] >= 5:         # 比值 > 2 且节假日频次 >= 5
             ratio_words.append((w, ratio, h_freq[w], nh_freq.get(w, 0)))
     ratio_words.sort(key=lambda x: x[1], reverse=True)
@@ -635,8 +645,8 @@ def dim_w4_per_holiday_words(seekers: list[dict], top_n: int = 30):
 
 
     For each holiday, plots the top N words with highest composite score
-    (holiday avg daily freq × min(fold_ratio, 20)), fully sorted by score.
-    每个节假日展示综合得分最高的 N 个词，得分为日均频次 × 倍数（最高 20 倍）。
+    (holiday avg daily freq × log2(1 + fold_ratio)), fully sorted by score.
+    每个节假日展示综合得分最高的 N 个词，得分为日均频次 × log2(1 + 倍数)。
     """
     log("=" * 50)
     log("W4: Per-Holiday Word Frequency vs Non-Holiday")
@@ -645,6 +655,10 @@ def dim_w4_per_holiday_words(seekers: list[dict], top_n: int = 30):
     nh_freq = compute_word_freq(seekers, nh_dates)
     num_nh = max(len(nh_dates), 1)
     nh_avg = {w: c / num_nh for w, c in nh_freq.items()}
+
+    # 地板值：非节假日最小非零日均值，避免零出现时倍数膨胀   FLOOR（数据驱动地板值）
+    nh_nonzero_vals = [v for v in nh_avg.values() if v > 0]
+    FLOOR = min(nh_nonzero_vals) if nh_nonzero_vals else 0.01
 
     # 按节假日名称分组
     holiday_groups = defaultdict(list)
@@ -672,20 +686,29 @@ def dim_w4_per_holiday_words(seekers: list[dict], top_n: int = 30):
         h_d = max(len(h_dates), 1)
         ha = {w: c / h_d for w, c in hf.items()}
         holiday_avg[hn] = ha
-        holiday_ratio[hn] = {w: ha[w] / max(nh_avg.get(w, 1e-6), 1e-6) for w in ha}
+        # FLOOR 地板值方案：非节假日零出现时用最小非零日均值作为分母下限
+        holiday_ratio[hn] = {w: ha[w] / max(nh_avg.get(w, 0), FLOOR) for w in ha}
         all_words.update(hf.keys())
+
+    # 最低文档频率过滤：只保留在 >= 2 个节假日中出现过的词
+    # 避免仅因个别用户偶然提及就进入分析结果
+    MIN_DF = 2
+    word_holiday_df = {}
+    for w in all_words:
+        word_holiday_df[w] = sum(1 for hn in holiday_names if holiday_avg[hn].get(w, 0) > 0)
+    all_words = {w for w in all_words if word_holiday_df[w] >= MIN_DF}
 
     # ── CSV：词 × 节假日矩阵（含倍数列）──
     csv_path = os.path.join(STEP_OUT, 'w4_per_holiday_words.csv')
-    # 综合得分：跨节假日取 max(日均词频 × min(倍数, 20))
+    # 综合得分：跨节假日取 max(日均词频 × log2(1 + 倍数))
     word_score = {}
     for w in all_words:
         max_score = 0
         for hn in holiday_names:
             ha = holiday_avg[hn].get(w, 0)
             if ha > 0:
-                ratio = min(holiday_ratio[hn].get(w, 1), 20)
-                max_score = max(max_score, ha * ratio)
+                ratio = holiday_ratio[hn].get(w, 1)
+                max_score = max(max_score, ha * math.log2(1 + ratio))
         if max_score > 0:
             word_score[w] = max_score
 
@@ -693,12 +716,12 @@ def dim_w4_per_holiday_words(seekers: list[dict], top_n: int = 30):
     csv_top_n = 100
     selected_words = set()
 
-    # 各节假日 top 100（按该节假日的日均词频×倍数排序）
+    # 各节假日 top 100（按该节假日的日均词频×log2(1+倍数)排序）
     for hn in holiday_names:
         scored = []
         for w, ha in holiday_avg[hn].items():
-            ratio = min(holiday_ratio[hn].get(w, 1), 20)
-            scored.append((w, ha * ratio))
+            ratio = holiday_ratio[hn].get(w, 1)
+            scored.append((w, ha * math.log2(1 + ratio)))
         scored.sort(key=lambda x: x[1], reverse=True)
         for w, _ in scored[:csv_top_n]:
             selected_words.add(w)
@@ -736,11 +759,11 @@ def dim_w4_per_holiday_words(seekers: list[dict], top_n: int = 30):
         ax = axes[idx]
         h_avg_dict = holiday_avg[hn]
 
-        # 综合得分排序：日均频次 × min(倍数, 20)
+        # 综合得分排序：日均频次 × log2(1 + 倍数)
         scored = []
         for w, ha in h_avg_dict.items():
-            ratio = min(holiday_ratio[hn].get(w, 1), 20)
-            scored.append((w, ha, ratio, ha * ratio))
+            ratio = holiday_ratio[hn].get(w, 1)
+            scored.append((w, ha, ratio, ha * math.log2(1 + ratio)))
         scored.sort(key=lambda x: x[3], reverse=True)
         top = scored[:top_n]
 
@@ -796,7 +819,8 @@ def dim_w4_per_holiday_words(seekers: list[dict], top_n: int = 30):
         scored = [(w, holiday_avg[hn][w], holiday_ratio[hn].get(w, 0))
                   for w in holiday_avg[hn]
                   if holiday_avg[hn][w] >= 1]
-        scored.sort(key=lambda x: x[1] * min(x[2], 20), reverse=True)
+        # scored.sort(key=lambda x: x[1] * min(x[2], 20), reverse=True)
+        scored.sort(key=lambda x: x[1] * math.log2(1 + x[2]), reverse=True)
         top = scored[:8]
         if top:
             log(f"    {hn}: {[(w, f'{h:.1f}/d', f'{r:.1f}x') for w, h, r in top]}")
@@ -826,13 +850,13 @@ def dim_w5_per_holiday_words_heatmap(seekers: list[dict]):
     log("=" * 50)
     log("W5: Per-Holiday Word Log2-Ratio Heatmap vs Non-Holiday")
 
-    EPSILON = 1e-6  # 防止 log(0)，用于基线上为零的词
-
-    # 计算非节假日日均词频（baseline）
+    # 地板值：非节假日最小非零日均值，避免基线上为零时 log 爆炸
     nh_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
     nh_freq = compute_word_freq(seekers, nh_dates)
     num_nh = max(len(nh_dates), 1)
     nh_avg = {w: c / num_nh for w, c in nh_freq.items()}
+    nh_nonzero = [v for v in nh_avg.values() if v > 0]
+    EPSILON = min(nh_nonzero) if nh_nonzero else 0.01
 
     # 按节假日名分组
     holiday_groups = defaultdict(list)

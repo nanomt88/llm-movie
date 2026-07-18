@@ -5,12 +5,40 @@ Shared text processing utilities for the movie analysis pipeline.
 
 import re
 
+try:
+    import nltk
+    from nltk.stem import WordNetLemmatizer
+    _lemmatizer = WordNetLemmatizer()
+    for pkg in ['wordnet', 'omw-1.4']:
+        try:
+            nltk.data.find(f'corpora/{pkg}')
+        except LookupError:
+            nltk.download(pkg, quiet=True)
+    _HAS_NLTK = True
+except ImportError:
+    _lemmatizer = None
+    _HAS_NLTK = False
+
+
 from movie.config import log
+
+# 停用词规范化缓存（避免每次调用都重新去撇号）
+_stopword_cache = {}
+
+
+def _get_normalized_stopwords(stopwords):
+    """缓存停用词集的撇号规范化结果。"""
+    if stopwords is None:
+        return None
+    key = id(stopwords)
+    if key not in _stopword_cache:
+        _stopword_cache[key] = {w.replace("'", "") for w in stopwords}
+    return _stopword_cache[key]
 
 
 def tokenize(text: str, min_len: int = 3, stopwords: set = None) -> list[str]:
-    """Simple English tokenizer.
-    简单英文分词器。
+    """Simple English tokenizer with POS-aware lemmatization.
+    简单英文分词器（动词+名词双步词形还原）。
     Args:
         text:      input text to tokenize
         min_len:   minimum word length (default 3)
@@ -22,18 +50,22 @@ def tokenize(text: str, min_len: int = 3, stopwords: set = None) -> list[str]:
         return []
     text = text.lower()
     tokens = re.split(r"[^a-z']+", text)
+    # 统一去撇号：don't → dont，it's → its
+    _stopwords = _get_normalized_stopwords(stopwords)
     result = []
     for t in tokens:
-        t = t.strip("'")
+        t = t.strip("'").replace("'", "")   # 移除所有撇号
         if len(t) < min_len:
             continue
         if t.isnumeric():
             continue
-        if stopwords and t in stopwords:
+        if _HAS_NLTK:
+            t = _lemmatizer.lemmatize(t, pos='v')  # 先按动词还原：watched → watch
+            t = _lemmatizer.lemmatize(t, pos='n')  # 再按名词还原：movies → movie
+        if _stopwords and t in _stopwords:
             continue
         result.append(t)
     return result
-
 
 def deduplicate_seekers(seekers: list[dict]) -> list[dict]:
     """Deduplicate seeker records by (session_id, text).
