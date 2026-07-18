@@ -80,7 +80,7 @@ STOPWORDS = set({
 })
 
 # 附加领域噪音词：与电影讨论常见但不携带偏好信号的词汇
-DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
+DOMAIN_STOP = {'movie', 'movies', 'film', 'films',
                'watch', 'watched', 'watching', 'watchlist', 'like',
                'liked',                'looking', 'look', 'recommend', 'recommended',
                'recommendation', 'recommendations', 'suggest', 'suggested',
@@ -130,17 +130,17 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                 'njul', 'naug', 'nsep', 'noct', 'nnov', 'ndec',
                 'chntb', 'cneon', 'sxsrf', 'sclient', 'htt',
                 'mozambique', 'nellie', 'giphy', 'wiz', 'doo',
-                'elgort', 'gandalf', 'vonnegut', 'rainforest', 'smoked',
+                 'gandalf', 'vonnegut', 'rainforest', 'smoked',
                 'aboriginal', 'hispanic', 'eden', 'flame', 'heaps',
                 'thailand', 'january', 'trips', 'cells', 'hostage',
                 'outdoors', 'disabled', 'bite', 'holds', 'stood',
-                'pressure', 'encounters', 'palette', 'healthy', 'dystopia',
-                'paranoia', 'goosebumps', 'betrayal', 'nicolas', 'murray',
+                 'pressure', 'encounters', 'palette', 'healthy',
+                 'paranoia', 'goosebumps', 'betrayal',
                 'spring', 'danger', 'state', 'trend', 'theater',
-                'race', 'tracks', 'tall', 'mainstream', 'ups',
-                'wilson', 'jumpscare', 'define', 'despair', 'bigger',
+                 'race', 'tracks', 'tall', 'ups',
+                 'jumpscare', 'define', 'despair', 'bigger',
                 'giant', 'birthday', 'scares', 'faith', 'approach',
-                'stalin', 'soderbergh', 'miyazaki', 'downey', 'mendes',
+                 'stalin',
                 'passengers', 'concentration', 'pursuit', 'elizabeth',
                 'nightclub', 'adjacent', 'wicked', 'objective', 'orphan',
                 'neighbor', 'nurse', 'testing', 'camps', 'despair',
@@ -154,19 +154,19 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                 "haven't", "hasn't", "hadn't", "i'll", "i'd", "year's",
                 # ── 无语义偏好的通用词 ──
                 'feel', 'etc', 'letterboxd',
-                'web', 'context', 'source', 'medium',
+                'web', 'context', 'medium',
                 'recently', 'advance', 'main',
-                'example', 'examples', 'comments', 'request',
+                'example', 'examples',  'request',
                 # ── 流媒体平台/网站名（非推荐信号）──
-                'netflix', 'youtube', 'hulu', 'amazon', 'prime', 'disney',
-                'imdb', 'wikipedia', 'wiki', 'hollywood', 'streaming',
+                 'youtube',
+                 'imdb', 'wikipedia', 'wiki', 'hollywood',
                 # ── 通用填充词/语气词 ──
                 'similar', 'check', 'list', 'ones', 'sure', 'right',
                 'kinda', 'wow', 'hey', 'sorry', 'welcome', 'whatever',
                 'anyway', 'obviously', 'exactly', 'particularly',
                 'necessarily', 'completely', 'specifically', 'especially',
                 'personally', 'tho', 'damn', 'fucking', 'shit', 'hell',
-                'cool', 'nice', 'fine', 'happy', 'sad', 'course',
+                 'cool', 'nice', 'fine', 'course',
                 'ill', 'non', 'bonus',
                 # ── 通用动词（无偏好信号）──
                 'put', 'come', 'getting', 'seem', 'gets', 'came', 'fit',
@@ -174,9 +174,9 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                 'become', 'follow', 'following', 'share', 'explain',
                 'knows', 'happened', 'saying', 'mention', 'mentioned',
                 'called', 'adding', 'added', 'ask', 'asking', 'leave',
-                'reading', 'talking', 'search', 'finding', 'remember',
-                'forgot', 'hear', 'heard', 'sounds', 'seems', 'feels',
-                'felt', 'thinking', 'understand', 'believe', 'consider',
+                 'reading', 'talking', 'search', 'finding', 'remember',
+                 'forgot', 'hear', 'heard', 'sounds', 'seems', 'feels',
+                 'felt', 'thinking', 'understand', 'believe', 'consider',
                 'pick', 'wait', 'hoping', 'wanting', 'works', 'stop',
                 'start', 'agree', 'removed', 'keep', 'point', 'sort',
                 'prefer', 'preferably', 'appreciate', 'appreciated',
@@ -188,9 +188,8 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                 'opinion', 'perspective', 'situation', 'attention',
                 'problem', 'question', 'chance', 'moment', 'moments',
                 'week', 'country', 'city', 'town', 'world', 'home',
-                'house', 'room', 'school', 'friend', 'friends', 'wife',
-                'men', 'women', 'boy', 'girl', 'kid', 'kids', 'parents',
-                'relationship',
+                 'house', 'room', 'school',
+                 'men', 'women', 'boy', 'girl', 'relationship',
                 # ── 通用形容词/副词（无类型信号）──
                 'long', 'big', 'short', 'small', 'high', 'low', 'full',
                 'entire', 'whole', 'certain', 'particular', 'specific',
@@ -198,21 +197,20 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                 'actual', 'multiple', 'single', 'half', 'early', 'late',
                 'lately', 'currently', 'past', 'future', 'recent',
                 'modern', 'older', 'young', 'fast', 'slow', 'easy',
-                'hard', 'deep', 'close', 'huge', 'crazy', 'wrong',
-                # ── 电影/平台元词 ──
-                'series', 'episode', 'episodes', 'season', 'seasons',
-                'trailer', 'trilogy', 'reviews', 'rec', 'recs', 'ref',
-                'comment', 'listed', 'description', 'subtitles', 'binge',
+                 'hard', 'close', 'huge', 'crazy', 'wrong',
+                 # ── 电影/平台元词 ──
+                 'trailer', 'trilogy', 'reviews', 'rec', 'recs', 'ref',
+                 'comment', 'listed', 'description', 'subtitles',
                 # ── 时间/季节词（非类型信号）──
                 'april', 'june', 'autumn', 'sept', 'today', 'tonight',
                 # ── 国籍/语言（非类型信号）──
                 'american', 'english', 'french', 'japanese', 'korean',
                 # ── 极低频噪音（编码残留/极罕见人名）──
                 'wordsextra', 'urxf', 'gcrd', 'seligman', 'noblewoman',
-                'nymphomaniac', 'gainsbourg', 'champion', 'boot',
+                 'nymphomaniac', 'champion', 'boot',
                 # ── W4 CSV 中新增噪音词 ──
                 # 编码残留（ratio > 1000 且 non_holiday_avg ≈ 0）
-                'domina', 'balrog', 'droplabs', 'batista', 'demille',
+                 'domina', 'balrog', 'droplabs',
                 'cornfield', 'otto', 'alteration', 'serp', 'gws', 'rlz',
                 'enus', 'mtt', 'tik', 'jpg', 'rly', 'nhappy', 'njane',
                 'crazed', 'mongols', 'wyatt', 'hobo', 'knockoffs',
@@ -239,28 +237,54 @@ DOMAIN_STOP = {'movie', 'movies', 'film', 'films', 'show', 'shows',
                 'surveillance', 'chainsaw', 'wolfenstein', 'synecdoche',
                 'somthing', 'vonnegut', 'memorial', 'station', 'grant',
                 'eleven', 'professor', 'captivating', 'disagree', 'summer',
-                'sibling', 'blue', 'relaxing', 'intelligent', 'angry',
+                 'sibling', 'blue', 'intelligent', 'angry',
                 'muscular', 'honey', 'struck', 'scheming', 'infidelity',
                 'love', 'loved', 'celebrate', 'desire', 'fight',
                 'negotiation', 'puzzles',
                 # ── 节假日自指词（非推荐信号）──
-                'christmas', 'halloween', 'thanksgiving', 'merry',
+                 'christmas', 'halloween', 'thanksgiving',
                 'valentines', 'valentine', 'easter', 'hanukkah',
                 'holiday', 'holidays',
-                # ── 人名（演员/导演/角色）──
-                'neil', 'leslie', 'charlotte', 'holmes', 'von', 'joe',
-                'hepburn', 'cary', 'reynolds', 'ruffalo', 'campbell',
-                'churchill', 'norris', 'wayne', 'jerry', 'connor',
-                'mendes', 'downey', 'soderbergh', 'miyazaki', 'nicolas',
-                'murray', 'bruno', 'jordan', 'lars', 'trier',
+                 # ── 人名（非电影从业者/虚构角色/历史人物，继续停用）──
+                 'neil', 'leslie', 'charlotte', 'holmes', 'von', 'joe',
+                 'churchill', 'norris', 'jerry', 'lars',
                 # ── 特定电影名（非通用偏好信号）──
-                'spiderman', 'enola', 'gladiator', 'lego', 'atmos',
-                'ranked', 'kong', 'godzilla', 'werewolf',
+                 'spiderman', 'enola', 'gladiator', 'lego', 'atmos',
+                 'ranked', 'kong', 'godzilla',
                 # ── 活动词 ──
                 'camping', 'cake',
-                # ── 历史/政治/社会词 ──
-                'nazi', 'genocide', 'racist', 'politics', 'stalin',
-               }
+                 # ── 历史/政治/社会词 ──
+                 'nazi', 'genocide', 'racist', 'politics', 'stalin',
+                 # ── 高频噪声词补充（W1 top 500 中无 W6 信号的填充词）──
+                 # 时态/时间填充
+                 'now', 'since', 'ago', 'far', 'either', 'almost', 'enough',
+                 'least', 'mostly', 'less', 'second', 'soon', 'yesterday',
+                 'months', 'weeks', 'month', 'decade', 'later', 'finally',
+                 'starting', 'decided', 'beginning', 'ended', 'starts',
+                 'realize', 'realized', 'forward', 'despite', 'whether',
+                 # 量词/限定词填充
+                 'several', 'bunch', 'couple', 'ton', 'rest', 'deal',
+                 'amount', 'common', 'various',
+                 # 强化副词填充
+                 'super', 'totally', 'extremely', 'highly', 'somewhat',
+                 'somehow', 'possibly', 'generally', 'mainly', 'truly',
+                 'genuinely', 'easily',
+                 # 论坛/元信息填充
+                 'idk', 'imo', 'spoilers', 'review', 'google', 'youtu',
+                 'png', 'deleted', 'topic', 'subject', 'format', 'media',
+                 'content', 'background',
+                 # 通用动词填充
+                 'mean', 'trying', 'having', 'coming', 'happening', 'showing',
+                 'checking', 'describe', 'meant', 'focused', 'anymore',
+                 'giving', 'tend', 'stuck', 'working', 'plays', 'played',
+                 'playing', 'running',
+                 # 通用名词填充
+                 'view', 'terms', 'words', 'element', 'elements', 'points',
+                 'head', 'middle', 'figure', 'choice', 'order', 'cause',
+                 # 通用形容词填充
+                 'different', 'available', 'familiar', 'normal', 'obvious',
+                 'simple', 'strange', 'famous',
+                }
 
 ALL_STOPWORDS = STOPWORDS | DOMAIN_STOP       # 合并停用词总表
 

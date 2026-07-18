@@ -1,11 +1,20 @@
 from openai import OpenAI
 import os
 
+'''
+API Host
+llm-hsek2qqo6rwkdvwz.cn-beijing.maas.aliyuncs.com
+OpenAI 兼容地址
+https://llm-hsek2qqo6rwkdvwz.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+DashScope
+https://llm-hsek2qqo6rwkdvwz.cn-beijing.maas.aliyuncs.com/api/v1
+'''
+
 client = OpenAI(
     # 如果没有配置环境变量，请用阿里云百炼API Key替换：api_key="sk-xxx"
     # api_key="sk-ws-H.EMMIRPP.F9Hw.MEQCICAkZLpOf1Y8Y-YOoiEF0t819Evp5YBQbbBUo0UeKcdFAiBgMjkVdBfKEUi2OoksBa6KDR1FJrlS8AF_qskUllECpA",
     # base_url="https://ws-v2voxi8y4z0jsid8.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
-    api_key="sk-85aed58c0df049a6945bd066090efd4b",
+    api_key="sk-ws-H.EDIXIME.IzP3.MEUCIGOKZpsFozv5iQ1ntEbt4JaJRf-BQTUP_MMKPOfVO4JZAiEA1s_OhgPHxmusEmXE9fdQ4gOjrsf6IO1nLxDNvSXnVKw",
     base_url="https://llm-hsek2qqo6rwkdvwz.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
 )
 messages = [{"role": "user", "content": "你是谁"}]
