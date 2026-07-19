@@ -17,11 +17,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from src.config import (
+from his.src.config import (
     OUTPUT_DIR, sanitize_filename, _setup_font,
     generate_run_id, log, log_error, log_warn,
 )
-from src.debug_dump import extract_run_id, load_latest_by_step, find_latest_by_step
+from his.src.debug_dump import extract_run_id, load_latest_by_step, find_latest_by_step
 
 # 设置中文字体
 _setup_font()
@@ -88,7 +88,7 @@ def generate_heatmaps(records: list[dict], run_id: str = None):
 
     # 按预定义年龄段排序
     try:
-        from src import age_segment as age_mod
+        from his.src import age_segment as age_mod
         age_order = [s for s in age_mod.AGE_SEGMENTS if s in age_groups]
         age_order += sorted(set(age_groups) - set(age_mod.AGE_SEGMENTS))
     except ImportError:
@@ -203,7 +203,7 @@ def export_csv_data(records: list[dict], run_id: str = None) -> dict:
     # 年龄段排序
     age_groups = df_rec['age_segment'].unique()
     try:
-        from src import age_segment as age_mod
+        from his.src import age_segment as age_mod
         age_order = [s for s in age_mod.AGE_SEGMENTS if s in age_groups]
         age_order += sorted(set(age_groups) - set(age_mod.AGE_SEGMENTS))
     except ImportError:

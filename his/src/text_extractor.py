@@ -9,13 +9,12 @@
 
 import ast
 import re
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
 
-from src.config import INTERMEDIATE_DIR, generate_run_id, log, log_error, log_warn
-from src.debug_dump import write_json
+from his.src.config import generate_run_id, log, log_error, log_warn
+from his.src.debug_dump import write_json
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -226,7 +225,7 @@ def main():
     用法：python -m src.text_extractor
     说明：从 data_loader 加载 CSV，提取文本，使用新的 run_id 保存。
     """
-    from src.data_loader import load_csv
+    from his.src.data_loader import load_csv
     df = load_csv()
     result = run(df, save_files=True)
     print(f'\n提取完成: {len(result["text_batch"])} 条文本, run_id: {result["run_id"]}')

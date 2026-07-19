@@ -39,7 +39,7 @@ def get_unique_genres(genres_list):
 
 # 使用示例
 if __name__ == "__main__":
-    file_path = "../data/movie_info.json"
+    file_path = "../../data/movie_info.json"
 
     # 提取所有电影类型
     genres = extract_movie_genres(file_path)

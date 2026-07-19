@@ -43,10 +43,10 @@ TMDB_ACCESS_TOKEN = (
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
 # ── 文件路径 ──────────────────────────────────────────────────────────
-ENTITY2ID_PATH = "../data/entity2id.json"
+ENTITY2ID_PATH = "../../data/entity2id.json"
 CSV_PATH = "../data/my-test-data.csv"
-OUTPUT_PATH = "../data/movie_info.json"
-NOT_FOUND_PATH = "../data/movie_not_found.json"
+OUTPUT_PATH = "../../data/movie_info.json"
+NOT_FOUND_PATH = "../../data/movie_not_found.json"
 
 REQUEST_INTERVAL = 0.3   # TMDB 没有严格限制，但保持礼貌
 MAX_RETRIES = 3

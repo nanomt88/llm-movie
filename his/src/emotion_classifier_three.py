@@ -11,7 +11,6 @@
   intermediate/idx_to_emotion.json — 行索引 → 情感标签 映射
 """
 
-import os
 import re
 from datetime import datetime
 
@@ -19,11 +18,10 @@ import numpy as np
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from afinn import Afinn
 
-from src.config import (
-    SENTIMENT_CATEGORIES,
+from his.src.config import (
     generate_run_id, log, log_error, log_warn,
 )
-from src.debug_dump import write_json, extract_run_id, load_latest_by_step
+from his.src.debug_dump import write_json, extract_run_id, load_latest_by_step
 
 # ── 分析器初始化 ───────────────────────────────────────────────
 _vader = SentimentIntensityAnalyzer()

@@ -19,12 +19,9 @@ import warnings
 from collections import defaultdict
 
 import pandas as pd
-import numpy as np
-from src.debug_dump import write_json
-from src.config import (
-    DATA_DIR, INTERMEDIATE_DIR,
-    CSV_PATH, HOLIDAY_CSV, MOVIE_INFO_PATH,
-    generate_run_id, log, log_error, log_warn,
+from his.src.debug_dump import write_json
+from his.src.config import (
+    log_warn,
 )
 
 
@@ -546,7 +543,7 @@ def main():
 # ------------------------------------------------------------------
 if __name__ == '__main__':
     # main()
-    compare_age_segments('../data/conv/totle_user_seg_v3.json', '../output/intermediate/totle_holiday_S01_user_seg.json',
+    compare_age_segments('../../data/conv/totle_user_seg_v3.json', '../output/intermediate/totle_holiday_S01_user_seg.json',
                          '../output/intermediate/totle_user_seg_diff.csv')
 
     # 输出示例

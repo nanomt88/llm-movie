@@ -5,7 +5,7 @@
 无文件输出（纯工具函数），但提取过程中会将未匹配的 IMDB ID 记录到日志。
 """
 
-from src.config import log, log_error, log_warn
+from his.src.config import log
 
 
 def get_genres_from_movie_info(imdb_id: str,

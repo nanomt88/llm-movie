@@ -8,18 +8,17 @@
   intermediate/idx_to_emotion.json — 行索引 → 情绪标签 映射
 """
 
-import os
 import sys
 from datetime import datetime
 
 import torch
 from transformers import pipeline, AutoTokenizer
 
-from src.config import (
-    INTERMEDIATE_DIR, MODEL_LABEL_MAP,
+from his.src.config import (
+    MODEL_LABEL_MAP,
     generate_run_id, log, log_error, log_warn,
 )
-from src.debug_dump import write_json, extract_run_id, load_latest_by_step
+from his.src.debug_dump import write_json, extract_run_id, load_latest_by_step
 
 # 尝试加载 optimum.onnxruntime
 try:

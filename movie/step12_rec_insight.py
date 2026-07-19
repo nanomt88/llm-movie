@@ -710,7 +710,7 @@ def main():
     if not has_sentiment:
         log("N2: running sentiment analysis on sample...", "Step12")
         try:
-            from his.data_analyzer.sentiment import analyze_batch
+            from movie.utils.sentiment import analyze_batch
             texts = [s.get('proc_text', '') or s.get('raw_text', '') for s in sample_seekers]
             results = analyze_batch(texts)
             for s, res in zip(sample_seekers, results):

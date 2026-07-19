@@ -34,7 +34,7 @@ import matplotlib.pyplot as plt
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
 from movie.utils.text import (tokenize as _shared_tokenize, deduplicate_seekers,
                                build_conv_system, get_system_movie_ids)
-from his.data_analyzer.sentiment import analyze_batch
+from movie.utils.sentiment import analyze_batch
 
 # ── 初始化 ──────────────────────────────────────────────────────────
 setup_matplotlib()

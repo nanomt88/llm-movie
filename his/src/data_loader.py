@@ -16,11 +16,11 @@ from collections import Counter
 
 import pandas as pd
 
-from src.config import (
+from his.src.config import (
     CSV_PATH, HOLIDAY_CSV, MOVIE_INFO_PATH,
     generate_run_id, log, log_error, log_warn,
 )
-from src.debug_dump import write_json
+from his.src.debug_dump import write_json
 
 # ── 项目依赖 ──────────────────────────────────────────────────────
 # holiday_util 和 age_segment 在项目根目录，需要加入 sys.path
@@ -28,8 +28,8 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from src import age_segment
-from src.holiday_util import HolidayCalendar
+from his.src import age_segment
+from his.src.holiday_util import HolidayCalendar
 
 
 def load_csv(csv_path: str = CSV_PATH) -> pd.DataFrame:
@@ -217,7 +217,7 @@ def run(csv_path: str = CSV_PATH,
         raise
 
     try:
-        csv_path = "D:\workspaces\python\llm-movie\data\my-train-data.csv"
+        csv_path = "/data/my-train-data.csv"
         user_seg = segment_users(csv_path)
         result['user_seg'] = user_seg
     except Exception as e:

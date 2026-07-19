@@ -34,7 +34,7 @@ from his.data_analyzer.data_loader import (
     load_conversations, load_holiday_definitions, tag_holiday,
     load_movie_info, extract_imdb_ids, lookup_genre_counts,
 )
-from his.data_analyzer.sentiment import analyze_batch
+from movie.utils.sentiment import analyze_batch
 
 setup_matplotlib()
 STEP_OUT = os.path.join(OUTPUT_DIR, 'step4')

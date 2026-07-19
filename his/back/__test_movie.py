@@ -1,7 +1,7 @@
 """Quick test for movie_info.py"""
 import sys
 sys.path.insert(0, '../..')
-from src.movie_info import *
+from his.src.movie_info import *
 
 test_ids = ['tt0110148', 'tt0119675', 'tt0109424']
 id_to_name = {

@@ -1,13 +1,12 @@
 import pandas as pd
 import numpy as np
-import openpyxl
 from datetime import timedelta
 import os
 import sys
 
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from src.holiday_util import HolidayCalendar
+from his.src.holiday_util import HolidayCalendar
 
 
 def analyze_daily_questions(csv_path: str = '../data/yearly/data_2021.csv'):
@@ -207,7 +206,7 @@ def save_to_excel(daily_stats: pd.DataFrame, output_path: str = 'data/daily_anal
 
 if __name__ == '__main__':
     # 分析单个文件
-    csv_path = '../data/yearly/data_2021.csv'
+    csv_path = '../../data/yearly/data_2021.csv'
 
     if os.path.exists(csv_path):
         # 执行分析

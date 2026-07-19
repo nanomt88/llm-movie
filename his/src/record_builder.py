@@ -13,19 +13,16 @@
 import os
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
 
-from src.config import (
-    INTERMEDIATE_DIR,
-    generate_run_id, log, log_error, log_warn,
-)
-from src.debug_dump import (
+from his.src.config import (
+    generate_run_id, log, log_error, )
+from his.src.debug_dump import (
     write_json, write_json_lines,
     extract_run_id, load_latest_by_step,
 )
-from src.text_extractor import extract_movie_text_from_system, extract_imdb_ids
-from src.genre_classifier import classify_genre_from_ids, log_not_found_ids
+from his.src.text_extractor import extract_movie_text_from_system, extract_imdb_ids
+from his.src.genre_classifier import classify_genre_from_ids, log_not_found_ids
 
 
 def build_analysis_data(df: pd.DataFrame,
@@ -233,7 +230,7 @@ def main():
                          f'{os.path.basename(filepath)}')
 
     # 加载原始数据
-    from src.data_loader import load_csv, load_holiday_calendar, load_movie_info, segment_users
+    from his.src.data_loader import load_csv, load_holiday_calendar, load_movie_info, segment_users
     df = load_csv()
     cal = load_holiday_calendar()
     movie_info = load_movie_info()

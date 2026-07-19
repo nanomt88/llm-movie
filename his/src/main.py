@@ -17,15 +17,15 @@
 import argparse
 from datetime import datetime
 
-from src.config import log, log_error, log_warn
+from his.src.config import log, log_error, log_warn
 
 # ── 模块入口 ──────────────────────────────────────────────
-from src.data_loader import run as run_data_loader
-from src.text_extractor import run as run_text_extractor
-from src.emotion_classifier import run as run_emotion_classifier
-from src.emotion_classifier_three import run as run_emotion_classifier_three
-from src.record_builder import run as run_record_builder
-from src.heatmap_generator import run as run_heatmap_generator
+from his.src.data_loader import run as run_data_loader
+from his.src.text_extractor import run as run_text_extractor
+from his.src.emotion_classifier import run as run_emotion_classifier
+from his.src.emotion_classifier_three import run as run_emotion_classifier_three
+from his.src.record_builder import run as run_record_builder
+from his.src.heatmap_generator import run as run_heatmap_generator
 
 
 _STEP_NAMES = [

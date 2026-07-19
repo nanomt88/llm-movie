@@ -61,8 +61,8 @@ def _sanitize_filename(name: str) -> str:
 
 
 # ── 项目模块 ──────────────────────────────────────────────────────
-from src import age_segment
-from src.holiday_util import HolidayCalendar
+from his.src import age_segment
+from his.src.holiday_util import HolidayCalendar
 
 # ══════════════════════════════════════════════════════════════════
 #  0. 路径配置

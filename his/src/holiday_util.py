@@ -478,7 +478,7 @@ if __name__ == '__main__':
 
     # 测试正则表达式匹配统计
     matched_df = extract_and_count_regex_pattern(
-        input_file='../data/conv/all_holiday_records.csv',
+        input_file='../../data/conv/all_holiday_records.csv',
         pattern=r'tt\d+',
-        output_file='../data/conv/matched_tt_records.csv'
+        output_file='../../data/conv/matched_tt_records.csv'
     )
