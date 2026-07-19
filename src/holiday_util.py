@@ -196,7 +196,7 @@ def merge_all_holiday_records(input_dir: str = '../data/yearly',
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
-    from extrace import load_records_pd
+    from his.extrace import load_records_pd
 
     cal = HolidayCalendar()
 
@@ -299,7 +299,7 @@ def main_test():
         csv_path = os.path.join(data_dir, csv_file)
         import sys
         sys.path.insert(0, os.path.dirname(__file__))
-        from extrace import load_records_pd
+        from his.extrace import load_records_pd
 
         df = load_records_pd(csv_path)
         df_tagged = cal.add_holiday_flags(df, col='utc_time')
@@ -442,7 +442,7 @@ def main_test():
         csv_path = os.path.join(data_dir, csv_file)
         import sys
         sys.path.insert(0, os.path.dirname(__file__))
-        from extrace import load_records_pd
+        from his.extrace import load_records_pd
 
         df = load_records_pd(csv_path)
         df_tagged = cal.add_holiday_flags(df, col='utc_time')

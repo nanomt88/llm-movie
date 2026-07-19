@@ -28,11 +28,9 @@ Performance note: sentiment analysis on 142k+ questions takes ~2-3 min.
 
 import os
 import csv
-import json
 import calendar
 from collections import defaultdict, Counter
-from datetime import datetime, timedelta, timezone
-import re
+from datetime import datetime, timedelta
 
 import numpy as np
 import matplotlib
@@ -40,20 +38,16 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
-from data_analyzer.config import (
-    OUTPUT_DIR, MIN_DATA_ROWS, FULL_YEAR_CSV, HOLIDAY_CSV,
-    MOVIE_INFO_PATH, setup_matplotlib, log,
+from his.data_analyzer.config import (
+    OUTPUT_DIR, MIN_DATA_ROWS, setup_matplotlib, log,
 )
-from data_analyzer.data_loader import (
-    load_conversations, load_holiday_definitions, tag_holiday,
-    load_movie_info, extract_imdb_ids, lookup_genre_counts,
+from his.data_analyzer.data_loader import (
+    extract_imdb_ids, lookup_genre_counts,
 )
-from data_analyzer.sentiment import analyze_batch, print_summary
 
 # Reuse shared logic from v1
-from data_analyzer.step4_holiday_compare import (
-    load_and_prepare, get_sentiment_for_texts, SENTIMENT_CACHE,
-    get_baseline_date,
+from his.data_analyzer.step4_holiday_compare import (
+    load_and_prepare, get_sentiment_for_texts, get_baseline_date,
 )
 
 setup_matplotlib()

@@ -19,13 +19,12 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from data_analyzer.config import (
+from his.data_analyzer.config import (
     OUTPUT_DIR, MIN_DATA_ROWS, FULL_YEAR_CSV,
     setup_matplotlib, log,
 )
-from data_analyzer.data_loader import (
+from his.data_analyzer.data_loader import (
     load_conversations, load_holiday_definitions, tag_holiday,
-    parse_processed_text,
 )
 
 setup_matplotlib()

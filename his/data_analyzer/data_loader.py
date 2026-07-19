@@ -11,9 +11,9 @@ import re
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from data_analyzer.config import (
+from his.data_analyzer.config import (
     HOLIDAY_CSV, HOLIDAY_CONV_CSV, FULL_YEAR_CSV, MOVIE_INFO_PATH,
-    MIN_DATA_ROWS, DATA_DIR, log,
+    log,
 )
 
 

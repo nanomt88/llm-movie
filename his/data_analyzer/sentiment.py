@@ -16,7 +16,7 @@ import numpy as np
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from afinn import Afinn
 
-from data_analyzer.config import INTENSITY_MILD, INTENSITY_MODERATE, log
+from his.data_analyzer.config import INTENSITY_MILD, INTENSITY_MODERATE, log
 
 # ── Singleton analyzers ───────────────────────────────────────────────
 _vader = SentimentIntensityAnalyzer()

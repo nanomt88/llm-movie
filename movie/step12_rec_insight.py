@@ -16,15 +16,14 @@ Output: output/movie/step12/*.png
 
 import os
 import re
-from collections import Counter, defaultdict
+from collections import defaultdict
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from movie.config import STEP_DIRS, setup_matplotlib, log
-from movie.utils.text import build_conv_system, get_system_movie_ids
-
+from movie.utils.text import build_conv_system
 
 setup_matplotlib()
 STEP_OUT = STEP_DIRS[12]
@@ -711,7 +710,7 @@ def main():
     if not has_sentiment:
         log("N2: running sentiment analysis on sample...", "Step12")
         try:
-            from data_analyzer.sentiment import analyze_batch
+            from his.data_analyzer.sentiment import analyze_batch
             texts = [s.get('proc_text', '') or s.get('raw_text', '') for s in sample_seekers]
             results = analyze_batch(texts)
             for s, res in zip(sample_seekers, results):

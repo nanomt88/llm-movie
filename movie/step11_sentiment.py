@@ -21,7 +21,6 @@ Output: output/movie/step11/*.png + CSV
 
 import os               # 文件路径操作
 import csv              # CSV 读写
-import re               # 正则表达式，用于分词
 import calendar          # 日期计算（月前基线）
 from collections import Counter, defaultdict  # 计数器与默认字典
 from datetime import datetime, timedelta      # 基线日期计算
@@ -35,7 +34,7 @@ import matplotlib.pyplot as plt
 from movie.config import STEP_DIRS, MIN_DATA_ROWS, setup_matplotlib, log
 from movie.utils.text import (tokenize as _shared_tokenize, deduplicate_seekers,
                                build_conv_system, get_system_movie_ids)
-from data_analyzer.sentiment import analyze_batch
+from his.data_analyzer.sentiment import analyze_batch
 
 # ── 初始化 ──────────────────────────────────────────────────────────
 setup_matplotlib()

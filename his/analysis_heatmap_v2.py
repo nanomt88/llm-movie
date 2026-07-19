@@ -11,7 +11,7 @@ LLM-Movie 情感分析脚本 v2.1 (基于 movie_info.json 类型提取)
   6. 对每组输出 3 张热图
 
 使用方式:
-  python analysis_heatmap_v2.py
+  python analysis_heatmap_v1.py
 
 依赖:
   pip install vaderSentiment afinn nltk textblob pandas numpy matplotlib seaborn

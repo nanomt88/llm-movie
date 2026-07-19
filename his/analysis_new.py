@@ -10,7 +10,7 @@ LLM-Movie 情感分析脚本 v2.0 (基于词典)
   5. 对每组输出 3 张热图
 
 使用方式:
-  python analysis_new.py
+  python analysis_new_v2.py
 
 依赖:
   pip install vaderSentiment afinn nltk textblob pandas numpy matplotlib seaborn

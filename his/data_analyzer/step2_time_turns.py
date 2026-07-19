@@ -9,7 +9,7 @@ Output: output/step2/*.png + CSV
 
 import os
 import csv
-from collections import Counter, defaultdict
+from collections import Counter
 
 import numpy as np
 import matplotlib
@@ -17,11 +17,11 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
-from data_analyzer.config import (
-    OUTPUT_DIR, MIN_DATA_ROWS, FULL_YEAR_CSV,
+from his.data_analyzer.config import (
+    OUTPUT_DIR, FULL_YEAR_CSV,
     setup_matplotlib, log,
 )
-from data_analyzer.data_loader import (
+from his.data_analyzer.data_loader import (
     load_conversations, load_holiday_definitions, tag_holiday,
 )
 

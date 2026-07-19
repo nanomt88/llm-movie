@@ -13,7 +13,7 @@ LLM-Movie 数据分析脚本 v1.0
       ③ 假日 × 影片类型    (颜色=观影次数)
 
 使用方式:
-  python analysis_heatmap.py
+  python analysis_heatmap_v1.py
 
 依赖:
   pip install pandas numpy matplotlib seaborn

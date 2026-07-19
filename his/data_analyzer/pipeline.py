@@ -10,7 +10,7 @@ Usage:
 import time
 from datetime import timedelta
 
-from data_analyzer.config import log, setup_matplotlib
+from his.data_analyzer.config import log, setup_matplotlib
 
 setup_matplotlib()
 
@@ -46,7 +46,7 @@ def main():
     log("=" * 65, "Pipeline")
 
     # ── Import all step modules ──────────────────────────────────────
-    from data_analyzer import (
+    from his.data_analyzer import (
         step1_length_freq as s1,
         step2_time_turns as s2,
         step3_scenarios as s3,
