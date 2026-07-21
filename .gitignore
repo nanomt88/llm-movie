@@ -3,3 +3,9 @@
 /.idea
 /.idea/workspace.xml
 /output/
+.codegraph/*
+.codegraph
+.omo
+.sisyphus
+.venv
+/data/yearly/
