@@ -377,7 +377,7 @@ def dim_n2_holiday_vs_nonholiday_network(
 #  N3: Top Co-occurring Movie Pairs
 # ═══════════════════════════════════════════════════════════════════════
 # 【图表类型】表格/日志输出
-# 【统计口径】统计所有电影对(pair)的共现次数，取 TOP_N
+# 【统计口径】规则8：从系统回复中提取电影ID，统计所有电影对(pair)的共现次数，取 TOP_N
 # 【输出文件】CSV: n3_top_cooccurrences.csv
 #   含: 电影A(title+year+genre), 电影B(title+year+genre), 共现次数
 # ═══════════════════════════════════════════════════════════════════════
@@ -391,7 +391,7 @@ def dim_n3_top_cooccurrences(seekers: list[dict], movie_info: dict):
     # 统计所有共现对
     pair_counter: Counter = Counter()
     for r in seekers:
-        ids = r.get('imdb_ids', [])
+        ids = r.get('system_movie_ids', set())  # 规则8：从系统回复获取的电影ID
         if len(set(ids)) >= 2:
             for a, b in combinations(sorted(set(ids)), 2):
                 pair_counter[(a, b)] += 1
@@ -505,8 +505,8 @@ def dim_n4_network_centrality(G: nx.Graph):
 #  N5: Genre-Level Co-occurrence Network
 # ═══════════════════════════════════════════════════════════════════════
 # 【图表类型】NetworkX 图
-# 【统计口径】从电影共现关系聚合到类型层面
-#   节点 = 电影类型, 边 = 两类型出现在同一提问中的次数(求和)
+# 【统计口径】规则8：从系统回复提取电影ID，再从电影共现关系聚合到类型层面
+#   节点 = 电影类型, 边 = 两类型出现在同一系统回复中的次数(求和)
 # 【输出文件】PNG: n5_genre_cooccurrence.png, GEXF: n5_*.gexf
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -519,7 +519,7 @@ def dim_n5_genre_cooccurrence(seekers: list[dict], movie_info: dict):
     # 对每条记录，提取提及电影的类型，统计跨电影的类型共现
     genre_pairs = []
     for r in seekers:
-        ids = r.get('imdb_ids', [])
+        ids = r.get('system_movie_ids', set())  # 规则8：从系统回复获取的电影ID
         if len(set(ids)) < 2:
             continue
         genres_per_movie = []

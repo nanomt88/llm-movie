@@ -67,6 +67,7 @@ def tokenize(text: str, min_len: int = 3, stopwords: set = None) -> list[str]:
         result.append(t)
     return result
 
+# review 无问题
 def deduplicate_seekers(seekers: list[dict]) -> list[dict]:
     """Deduplicate seeker records by (session_id, text).
     按 (会话ID, 文本内容) 去重用户提问记录。
@@ -74,18 +75,30 @@ def deduplicate_seekers(seekers: list[dict]) -> list[dict]:
     规则9：在同一轮次会话中，用户提问相同时需要排重。
     不同会话中相同文本的提问不应被去除。
     """
+    # 第78行：已见过的 key 集合，用于判断是否重复
     seen = set()
+    # 第79行：去重后的结果列表
     deduped = []
+    # 第80行：遍历每一条用户提问记录
     for r in seekers:
+        # 第81-83行：优先取 proc_text（已处理文本），为空则回退到 raw_text（原始文本）
         text = r.get('proc_text', '')
         if not text:
             text = r.get('raw_text', '')
+        # 第84行：获取该记录的会话 ID
         sid = r.get('session_id', '')
+        # 第85行：构造去重 key = (会话ID, 文本内容去空白并转小写)
+        #         key 是一个二元组，同时包含会话ID和文本内容
         key = (sid, (text or '').strip().lower())
+        # 第86-87行：key[1] 是文本部分，若为空字符串 → 跳过（无内容）
+        #            若 key 已在 seen 中 → 跳过（重复记录）
         if not key[1] or key in seen:
             continue
+        # 第88行：将 key 加入已见集合
         seen.add(key)
+        # 第89行：保留这条记录（追加到结果列表）
         deduped.append(r)
+    # 第90-93行：统计并打印去重数量，返回结果
     n_removed = len(seekers) - len(deduped)
     if n_removed > 0:
         log(f"  Deduplication: removed {n_removed} duplicates (left {len(deduped)})")

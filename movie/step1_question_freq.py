@@ -18,8 +18,8 @@ Step 1: Question Frequency & Hourly Access Analysis
 日周期-小时段 + 访问次数:
   节假日 VS 非节假日 各个时间段(0-24h)平均提问次数对比
   节假日 VS 工作日 VS 周末 各个时间段平均提问次数对比
-  各个节假日 VS 非节假日 各个时间段平均提问次数对比 (heatmap)
-  各个节假日 VS 工作日 VS 周末 各个时间段平均提问次数对比 (heatmap)
+  各个节假日 VS 非节假日 各个时间段平均提问次数对比 (line charts)
+  各个节假日 VS 工作日 VS 周末 各个时间段平均提问次数对比 (line charts)
 
 Output: output/movie/step1/*.png + CSV (A5-A6 added for word-length analysis)
 输出目录：output/movie/step1/，包含 PNG 图表和 CSV 数据文件（A5-A6 新增单词数分析）
@@ -1235,8 +1235,8 @@ def dim_b2_hourly_holiday_workday_weekend(seekers: list[dict]):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  B3: 各个节假日 VS 非节假日 小时段 (Heatmap)
-#  B3: Per-Holiday Hourly Difference: Holiday minus Non-Holiday
+#  B3: 各个节假日 VS 非节假日 小时段 (Line Charts)
+#  B3: Per-Holiday Hourly Distribution vs Non-Holiday
 # ═══════════════════════════════════════════════════════════════════════
 # 【图表类型】
 #   热力图（Heatmap）
@@ -1274,26 +1274,27 @@ def dim_b2_hourly_holiday_workday_weekend(seekers: list[dict]):
 
 def dim_b3_per_holiday_hourly_vs_nonholiday(seekers: list[dict]):
     """
-    Heatmap: each holiday name (row) x hour (col) showing the difference
-    between holiday hourly avg and non-holiday hourly baseline.
-    热力图：每个节假日名称在各小时与非节假日基线的差值。
-    行=节假日名称，列=小时(0-23)，颜色=差值。
+    Two line charts for per-holiday hourly distribution vs non-holiday baseline:
+      1) b3_*_lines.png  — all holidays overlaid + non-holiday baseline (dashed)
+      2) b3_*_facet.png  — small multiples: one subplot per holiday + baseline
+    两张折线图：各节假日逐小时分布 vs 非节假日基线。
+    图1=多线叠加（所有节假日 + 基线虚线），图2=分面小多图（每个节假日一个子图）。
     Args:
         seekers: 提问者数据行列表
     """
     log("=" * 50)
-    log("B3: Per-Holiday Hourly Distribution vs Non-Holiday (Heatmap)")
+    log("B3: Per-Holiday Hourly Distribution vs Non-Holiday (Line Charts)")
 
     # Aggregate holidays by name（按节假日名称聚合）
     holiday_groups = defaultdict(list)
     for r in seekers:
         if r['period'] == 'holiday':
             name = r['holiday_name'][:6]  # 取前6个字符作为组名
-            holiday_groups[name].append(r)  # 添加到对应组
+            holiday_groups[name].append(r)
 
     # Filter: enough data（过滤掉数据量太少的节假日）
     holiday_groups = {k: v for k, v in holiday_groups.items()
-                      if len(v) >= MIN_DATA_ROWS}  # 提问数 ≥ MIN_DATA_ROWS
+                      if len(v) >= MIN_DATA_ROWS}
     if not holiday_groups:
         log("  WARN: No holiday groups with sufficient data")
         return
@@ -1302,52 +1303,78 @@ def dim_b3_per_holiday_hourly_vs_nonholiday(seekers: list[dict]):
     non_holiday_dates = set(r['date'] for r in seekers if r['period'] != 'holiday')
     nh_hourly = _hourly_avg(seekers, non_holiday_dates)
 
-    # Per-holiday hourly values（计算每个节假日的逐小时值）
-    group_names = sorted(holiday_groups.keys())  # 节假日名称排序
-    matrix = np.zeros((len(group_names), 24))  # 矩阵：行=节假日，列=小时
+    # Per-holiday hourly absolute values（每个节假日的逐小时绝对值）
+    group_names = sorted(holiday_groups.keys())
+    h_hourly_dict = {}
+    for name in group_names:
+        group_dates = set(r['date'] for r in holiday_groups[name])
+        h_hourly_dict[name] = _hourly_avg(holiday_groups[name], group_dates)
 
-    for i, name in enumerate(group_names):
-        group_dates = set(r['date'] for r in holiday_groups[name])  # 该节假日的日期集合
-        h_hourly = _hourly_avg(holiday_groups[name], group_dates)  # 该节假日的逐小时均值
-        for h in range(24):
-            # Difference: holiday avg - non-holiday avg（节假日均值减去非节假日基线）
-            matrix[i, h] = h_hourly[h] - nh_hourly[h]
+    hours = list(range(24))
+    n = len(group_names)
+    log(f"  {n} holidays, baseline from {len(non_holiday_dates)} non-holiday days")
 
-    # Heatmap（绘制热力图）
-    fig, ax = plt.subplots(figsize=(16, max(6, len(group_names) * 0.4 + 2)))
-    vmax = max(abs(matrix.min()), abs(matrix.max()), 0.01)  # 最大绝对值，用于对称色阶
-    im = ax.imshow(matrix, cmap='RdBu_r', aspect='auto', vmin=-vmax, vmax=vmax)
-    annotate_heatmap(ax, matrix, fmt='.1f', fs=6)
-    # cmap='RdBu_r': 红蓝反向色图（红=正向差，蓝=负向差）
-
-    ax.set_xticks(range(24))
-    ax.set_xticklabels(range(24), fontsize=8)
-    ax.set_yticks(range(len(group_names)))
-    ax.set_yticklabels(group_names, fontsize=8)
+    # ── Chart 1: overlay line chart（多线叠加图）──
+    fig, ax = plt.subplots(figsize=(14, 7))
+    colors = plt.cm.tab20(np.linspace(0, 1, max(n, 1)))
+    for idx, name in enumerate(group_names):
+        ax.plot(hours, h_hourly_dict[name], 'o-', color=colors[idx],
+                linewidth=1.5, markersize=3, alpha=0.7, label=name)
+    ax.plot(hours, nh_hourly, 'k--', linewidth=2.5, alpha=0.9,
+            label='Non-holiday baseline')
     ax.set_xlabel('Hour of Day (UTC)')
-    ax.set_title('Per-Holiday Hourly Question Frequency: Difference from Non-Holiday Baseline\n'
-                 '(Red=more on holiday, Blue=less)', fontsize=11)
-    fig.colorbar(im, ax=ax, shrink=0.6, label='Avg Questions Diff')  # 颜色条
-
+    ax.set_ylabel('Avg Questions per Hour per Day')
+    ax.set_title('Per-Holiday Hourly Avg Questions vs Non-Holiday Baseline', fontsize=13)
+    ax.set_xticks(range(0, 24, 2))
+    ax.legend(fontsize=7, ncol=2, loc='upper right', framealpha=0.8)
+    ax.grid(axis='y', alpha=0.3)
     fig.tight_layout()
-    path = os.path.join(STEP_OUT, 'b3_per_holiday_hourly_heatmap.png')
-    fig.savefig(path)
+    path1 = os.path.join(STEP_OUT, 'b3_per_holiday_hourly_vs_nonholiday_lines.png')
+    fig.savefig(path1)
     plt.close(fig)
-    log(f"Saved: {path}")
+    log(f"Saved: {path1}")
 
-    # CSV
+    # ── Chart 2: small multiples（分面小多图）──
+    ncols = 5
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 3.5, nrows * 2.8),
+                             sharex=True, sharey=True)
+    axes_flat = np.atleast_1d(axes).ravel()
+    for idx, name in enumerate(group_names):
+        ax = axes_flat[idx]
+        ax.plot(hours, h_hourly_dict[name], 'o-', color=COLOR_HOLIDAY,
+                linewidth=1.5, markersize=3, alpha=0.85, label='Holiday')
+        ax.plot(hours, nh_hourly, '--', color=COLOR_NONHOLIDAY,
+                linewidth=1.5, alpha=0.7, label='Non-holiday')
+        ax.set_title(name, fontsize=9)
+        ax.set_xticks(range(0, 24, 6))
+        ax.grid(axis='y', alpha=0.3)
+        if idx == 0:
+            ax.legend(fontsize=7)
+    for idx in range(n, len(axes_flat)):
+        axes_flat[idx].set_visible(False)
+    fig.suptitle('Per-Holiday Hourly Avg Questions vs Non-Holiday Baseline (faceted)',
+                 fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    path2 = os.path.join(STEP_OUT, 'b3_per_holiday_hourly_vs_nonholiday_facet.png')
+    fig.savefig(path2)
+    plt.close(fig)
+    log(f"Saved: {path2}")
+
+    # CSV（差值格式：holiday_hourly - non_holiday_baseline）
     csv_path = os.path.join(STEP_OUT, 'b3_per_holiday_hourly_vs_nonholiday.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['holiday_name'] + [str(h) for h in range(24)])  # 表头：名称 + 0-23小时
-        for i, name in enumerate(group_names):
-            w.writerow([name] + [f'{matrix[i, h]:.4f}' for h in range(24)])
+        w.writerow(['holiday_name'] + [str(h) for h in range(24)])
+        for name in group_names:
+            diff = [h_hourly_dict[name][h] - nh_hourly[h] for h in range(24)]
+            w.writerow([name] + [f'{d:.4f}' for d in diff])
     log(f"Saved: {csv_path}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  B4: 各个节假日 VS 工作日 VS 周末 小时段 (Dual Heatmap)
-#  B4: Per-Holiday Hourly vs Workday & Weekend Dual Heatmap
+#  B4: 各个节假日 VS 工作日 VS 周末 小时段 (Line Charts)
+#  B4: Per-Holiday Hourly vs Workday & Weekend
 # ═══════════════════════════════════════════════════════════════════════
 # 【图表类型】
 #   双热力图（B3 已在上面板，B4 在下面板 - 含两张热力图）
@@ -1373,17 +1400,16 @@ def dim_b3_per_holiday_hourly_vs_nonholiday(seekers: list[dict]):
 
 def dim_b4_per_holiday_hourly_vs_workday_weekend(seekers: list[dict]):
     """
-    For each holiday (name grouped), plot hourly avg questions
-    with workday/weekend baselines.
-    Since 20+ holidays would make one chart too crowded,
-    we save subplots and a summary heatmap.
-    双热力图：每个节假日 vs 工作日基线和 vs 周末基线的逐小时差值。
-    上半图=节假日-工作日差值，下半图=节假日-周末差值。
+    Two line charts for per-holiday hourly distribution vs workday & weekend baselines:
+      1) b4_*_lines.png  — all holidays overlaid + workday/weekend baselines
+      2) b4_*_facet.png  — small multiples: one subplot per holiday + two baselines
+    两张折线图：各节假日逐小时分布 vs 工作日/周末基线。
+    图1=多线叠加（所有节假日 + 两条基线），图2=分面小多图（每个节假日一个子图）。
     Args:
         seekers: 提问者数据行列表
     """
     log("=" * 50)
-    log("B4: Per-Holiday Hourly Distribution vs Workday & Weekend")
+    log("B4: Per-Holiday Hourly Distribution vs Workday & Weekend (Line Charts)")
 
     # Aggregate holidays by name
     holiday_groups = defaultdict(list)
@@ -1402,67 +1428,83 @@ def dim_b4_per_holiday_hourly_vs_workday_weekend(seekers: list[dict]):
     # Workday and weekend hourly baselines
     workday_dates = set(r['date'] for r in seekers if r['period'] == 'workday')
     weekend_dates = set(r['date'] for r in seekers if r['period'] == 'weekend')
-    wd_hourly = _hourly_avg(seekers, workday_dates)  # 工作日逐小时基线
-    we_hourly = _hourly_avg(seekers, weekend_dates)  # 周末逐小时基线
+    wd_hourly = _hourly_avg(seekers, workday_dates)
+    we_hourly = _hourly_avg(seekers, weekend_dates)
 
+    # Per-holiday hourly absolute values
     group_names = sorted(holiday_groups.keys())
-
-    # Heatmap: holiday hourly - workday baseline（节假日-工作日差值矩阵）
-    matrix_wd = np.zeros((len(group_names), 24))
-    # Heatmap: holiday hourly - weekend baseline（节假日-周末差值矩阵）
-    matrix_we = np.zeros((len(group_names), 24))
-
-    for i, name in enumerate(group_names):
+    h_hourly_dict = {}
+    for name in group_names:
         group_dates = set(r['date'] for r in holiday_groups[name])
-        h_hourly = _hourly_avg(holiday_groups[name], group_dates)
-        for h in range(24):
-            matrix_wd[i, h] = h_hourly[h] - wd_hourly[h]  # 与工作日差值
-            matrix_we[i, h] = h_hourly[h] - we_hourly[h]  # 与周末差值
+        h_hourly_dict[name] = _hourly_avg(holiday_groups[name], group_dates)
 
-    # Save both heatmaps in one figure（上下排列两张热力图）
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, max(8, len(group_names) * 0.7 + 2)))
+    hours = list(range(24))
+    n = len(group_names)
+    log(f"  {n} holidays, workday baseline from {len(workday_dates)} days, "
+        f"weekend baseline from {len(weekend_dates)} days")
 
-    # 上半图：与工作日差值
-    vmax1 = max(abs(matrix_wd.min()), abs(matrix_wd.max()), 0.01)
-    im1 = ax1.imshow(matrix_wd, cmap='RdBu_r', aspect='auto', vmin=-vmax1, vmax=vmax1)
-    annotate_heatmap(ax1, matrix_wd, fmt='.1f', fs=6)
-    ax1.set_xticks(range(24))
-    ax1.set_xticklabels(range(24), fontsize=7)
-    ax1.set_yticks(range(len(group_names)))
-    ax1.set_yticklabels(group_names, fontsize=7)
-    ax1.set_title('Diff: Holiday Avg - Workday Baseline', fontsize=10)
-    fig.colorbar(im1, ax=ax1, shrink=0.5, label='Diff')
-
-    # 下半图：与周末差值
-    vmax2 = max(abs(matrix_we.min()), abs(matrix_we.max()), 0.01)
-    im2 = ax2.imshow(matrix_we, cmap='RdBu_r', aspect='auto', vmin=-vmax2, vmax=vmax2)
-    annotate_heatmap(ax2, matrix_we, fmt='.1f', fs=6)
-    ax2.set_xticks(range(24))
-    ax2.set_xticklabels(range(24), fontsize=7)
-    ax2.set_yticks(range(len(group_names)))
-    ax2.set_yticklabels(group_names, fontsize=7)
-    ax2.set_xlabel('Hour of Day (UTC)')
-    ax2.set_title('Diff: Holiday Avg - Weekend Baseline', fontsize=10)
-    fig.colorbar(im2, ax=ax2, shrink=0.5, label='Diff')
-
-    fig.suptitle('Per-Holiday Hourly Frequency: Difference from Workday & Weekend',
-                 fontsize=12)
+    # ── Chart 1: overlay line chart（多线叠加图）──
+    fig, ax = plt.subplots(figsize=(14, 7))
+    colors = plt.cm.tab20(np.linspace(0, 1, max(n, 1)))
+    for idx, name in enumerate(group_names):
+        ax.plot(hours, h_hourly_dict[name], 'o-', color=colors[idx],
+                linewidth=1.5, markersize=3, alpha=0.65, label=name)
+    ax.plot(hours, wd_hourly, '--', color=COLOR_WORKDAY,
+            linewidth=2.5, alpha=0.9, label='Workday baseline')
+    ax.plot(hours, we_hourly, ':', color=COLOR_WEEKEND,
+            linewidth=2.5, alpha=0.9, label='Weekend baseline')
+    ax.set_xlabel('Hour of Day (UTC)')
+    ax.set_ylabel('Avg Questions per Hour per Day')
+    ax.set_title('Per-Holiday Hourly Avg Questions vs Workday & Weekend Baselines',
+                 fontsize=13)
+    ax.set_xticks(range(0, 24, 2))
+    ax.legend(fontsize=7, ncol=2, loc='upper right', framealpha=0.8)
+    ax.grid(axis='y', alpha=0.3)
     fig.tight_layout()
-    path = os.path.join(STEP_OUT, 'b4_per_holiday_hourly_vs_workday_weekend.png')
-    fig.savefig(path)
+    path1 = os.path.join(STEP_OUT, 'b4_per_holiday_hourly_vs_workday_weekend_lines.png')
+    fig.savefig(path1)
     plt.close(fig)
-    log(f"Saved: {path}")
+    log(f"Saved: {path1}")
 
-    # CSV
+    # ── Chart 2: small multiples（分面小多图）──
+    ncols = 5
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 3.5, nrows * 2.8),
+                             sharex=True, sharey=True)
+    axes_flat = np.atleast_1d(axes).ravel()
+    for idx, name in enumerate(group_names):
+        ax = axes_flat[idx]
+        ax.plot(hours, h_hourly_dict[name], 'o-', color=COLOR_HOLIDAY,
+                linewidth=1.5, markersize=3, alpha=0.85, label='Holiday')
+        ax.plot(hours, wd_hourly, '--', color=COLOR_WORKDAY,
+                linewidth=1.5, alpha=0.7, label='Workday')
+        ax.plot(hours, we_hourly, ':', color=COLOR_WEEKEND,
+                linewidth=1.5, alpha=0.7, label='Weekend')
+        ax.set_title(name, fontsize=9)
+        ax.set_xticks(range(0, 24, 6))
+        ax.grid(axis='y', alpha=0.3)
+        if idx == 0:
+            ax.legend(fontsize=6)
+    for idx in range(n, len(axes_flat)):
+        axes_flat[idx].set_visible(False)
+    fig.suptitle('Per-Holiday Hourly Avg Questions vs Workday & Weekend (faceted)',
+                 fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    path2 = os.path.join(STEP_OUT, 'b4_per_holiday_hourly_vs_workday_weekend_facet.png')
+    fig.savefig(path2)
+    plt.close(fig)
+    log(f"Saved: {path2}")
+
+    # CSV（差值格式：holiday_hourly - workday/weekend_baseline）
     csv_path = os.path.join(STEP_OUT, 'b4_per_holiday_hourly_vs_workday_weekend.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['holiday_name'] + [str(h) for h in range(24)])
-        for i, name in enumerate(group_names):
-            diff_wd = [f'{matrix_wd[i, h]:.4f}' for h in range(24)]
-            w.writerow([f'{name}_vs_workday'] + diff_wd)
-            diff_we = [f'{matrix_we[i, h]:.4f}' for h in range(24)]
-            w.writerow([f'{name}_vs_weekend'] + diff_we)
+        for name in group_names:
+            diff_wd = [h_hourly_dict[name][h] - wd_hourly[h] for h in range(24)]
+            w.writerow([f'{name}_vs_workday'] + [f'{d:.4f}' for d in diff_wd])
+            diff_we = [h_hourly_dict[name][h] - we_hourly[h] for h in range(24)]
+            w.writerow([f'{name}_vs_weekend'] + [f'{d:.4f}' for d in diff_we])
     log(f"Saved: {csv_path}")
 
 
@@ -1520,9 +1562,9 @@ def main(data: dict = None):
     log("")
     dim_b2_hourly_holiday_workday_weekend(seekers)  # B2: 节假日vs工作日vs周末 逐小时平均提问数 (仅CSV, 已合并到B1)
     log("")
-    dim_b3_per_holiday_hourly_vs_nonholiday(seekers)  # B3: 各节假日逐小时 vs 非节假日基线 差值热力图
+    dim_b3_per_holiday_hourly_vs_nonholiday(seekers)  # B3: 各节假日逐小时 vs 非节假日基线 折线图(叠加+分面)
     log("")
-    dim_b4_per_holiday_hourly_vs_workday_weekend(seekers)  # B4: 各节假日逐小时 vs 工作日/周末基线 双差值热力图
+    dim_b4_per_holiday_hourly_vs_workday_weekend(seekers)  # B4: 各节假日逐小时 vs 工作日/周末基线 折线图(叠加+分面)
 
     log("")
     log("=" * 60)

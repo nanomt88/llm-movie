@@ -773,7 +773,7 @@ def dim_s4_genre_by_holiday(seekers: list[dict], movie_info: dict,
                 if np.isnan(val):
                     row.extend(['', ''])
                 else:
-                    stats_h = _compute_genre_sentiment(holiday_groups[hn], movie_info)
+                    stats_h = _compute_genre_sentiment(holiday_groups[hn], movie_info, conv_system)
                     h_avg = stats_h[genre]['avg']
                     row.extend([f'{h_avg:.4f}', f'{val:+.4f}'])
             w.writerow(row)
