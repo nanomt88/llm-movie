@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Master pipeline: runs Step 1 → Step 12 sequentially.
- 主流水线：按顺序依次运行步骤 1 到步骤 12。
+Master pipeline: runs Step 1 → Step 13 sequentially.
+ 主流水线：按顺序依次运行步骤 1 到步骤 13。
 
 Usage（使用方法）:
     python pipeline.py                # 运行所有步骤
@@ -32,6 +32,7 @@ STEPS = {
     10: "Aspect-Based Sentiment Analysis",      # 步骤10：ABSA与节假日差异化
     11: "Sentiment Analysis",                   # 步骤11：情感分析
     12: "Recommendation Insight Analysis",      # 步骤12：推荐洞察分析
+    13: "User-Mentioned Genre Sentiment Analysis",  # 步骤13：用户提及类型情感分析
 }
 
 
@@ -76,6 +77,8 @@ def run_step(step_num: int, data: dict = None) -> float:
             from movie.step11_sentiment import main as m
         elif step_num == 12:
             from movie.step12_rec_insight import main as m
+        elif step_num == 13:
+            from movie.step13_user_genre_sentiment import main as m
         else:
             log(f"  Unknown step {step_num}")  # 未知步骤
             return 0.0
@@ -96,11 +99,11 @@ def main():
        解析命令行参数并按顺序运行选中的步骤。"""
     # 创建参数解析器
     parser = argparse.ArgumentParser(
-        description="Movie Analysis Pipeline — Step 1 to Step 12")
+        description="Movie Analysis Pipeline — Step 1 to Step 13")
     # --steps 参数：指定要运行的步骤编号列表
     parser.add_argument(
         '--steps', nargs='+', type=int,
-        help='Steps to run (e.g. --steps 1 3 5). Default: all steps 1-12.')
+        help='Steps to run (e.g. --steps 1 3 5). Default: all steps 1-13.')
     # --skip 参数：指定要跳过的步骤编号列表
     parser.add_argument(
         '--skip', nargs='+', type=int, default=[],
