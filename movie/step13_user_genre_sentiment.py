@@ -108,6 +108,7 @@ def _compute_user_genre_stats(seekers: list[dict], movie_info: dict) -> dict[str
         'positive': 0, 'neutral': 0, 'negative': 0,
         'mild': 0, 'moderate': 0, 'strong': 0,
         'score_sum': 0.0,
+        'weight_sum': 0.0,  # 加权总权重（多电影提问稀释）
     })
     for r in seekers:
         score = r.get('sentiment_score', 0.0)
@@ -115,6 +116,9 @@ def _compute_user_genre_stats(seekers: list[dict], movie_info: dict) -> dict[str
         intensity = r.get('intensity', 'mild')
         # 用户提问中提及的电影 ID（data_loader 已从 processed 字段提取）
         tids = r.get('imdb_ids', []) or []
+        # 权重: 一条提问提及 N 部电影时，每部电影权重 = 1/N
+        # 避免多电影提问的情感得分被重复分配给所有电影
+        weight = 1.0 / len(tids) if tids else 1.0
         for tid in tids:
             info = movie_info.get(tid)
             if not info or 'genres' not in info:
@@ -124,10 +128,12 @@ def _compute_user_genre_stats(seekers: list[dict], movie_info: dict) -> dict[str
                 s['count'] += 1
                 s[sentiment] += 1
                 s[intensity] += 1
-                s['score_sum'] += score
-    # 计算平均得分与英文标签
+                # 加权得分: 多电影提问的得分被稀释
+                s['score_sum'] += score * weight
+                s['weight_sum'] += weight
+    # 计算加权平均得分与英文标签
     for g, s in stats.items():
-        s['avg_score'] = s['score_sum'] / max(s['count'], 1)
+        s['avg_score'] = s['score_sum'] / max(s['weight_sum'], 1.0)
         s['genre_en'] = to_en(g)
     return dict(stats)
 
@@ -426,18 +432,19 @@ def dim_u2_genre_avg_score_ranking(seekers: list[dict], movie_info: dict):
             color=SENT_COLORS['negative'],
         )
 
-    # ── CSV（全部类型按得分排序）──
+    # ── CSV（全部类型按得分降序排序）──
     csv_path = os.path.join(STEP_OUT, 'u2_genre_avg_score_ranking.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as f:
         w = csv.writer(f)
         w.writerow(['rank', 'genre_cn', 'genre_en', 'count',
                     'avg_score', 'positive_pct', 'negative_pct'])
-        for i, (g_cn, g_en, n, avg) in enumerate(
-            [(g, stats[g]['genre_en'], stats[g]['count'], stats[g]['avg_score'])
-             for g in genres], start=1):
+        # 按 avg_score 降序排列（与注释一致）
+        genres_by_score = sorted(genres, key=lambda g: stats[g]['avg_score'], reverse=True)
+        for i, g_cn in enumerate(genres_by_score, start=1):
             s = stats[g_cn]
+            n = s['count']
             w.writerow([
-                i, g_cn, g_en, n, f'{avg:.3f}',
+                i, g_cn, s['genre_en'], n, f'{s["avg_score"]:.3f}',
                 f'{s["positive"]/n*100:.1f}',
                 f'{s["negative"]/n*100:.1f}',
             ])
@@ -597,18 +604,18 @@ def dim_u4_holiday_vs_nonholiday(seekers: list[dict], movie_info: dict):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  U5: 类型 × 情感占比热力图 (Genre × Sentiment Proportion Heatmap)
-#  U5: Genre × Sentiment Proportion Heatmap
+#  U5: 类型情感占比分布 (Genre Sentiment Proportion Distribution)
+#  U5: Genre Sentiment Proportion Distribution
 # ═══════════════════════════════════════════════════════════════════════
-# 【图表类型】热力图: 行=类型, 列=(positive, neutral, negative), 值=占比%
-#   使用 RdBu_r 配色：红=高占比, 蓝=低占比
+# 【图表类型】分组柱状图: x 轴=类型(含 Overall 参照组), 每组 3 根柱(正面/中性/负面)
+# 【统计口径】各类型 positive/neutral/negative 占比%，Overall 为全局均值
 # 【输出文件】PNG: u5_genre_sentiment_heatmap.png, CSV: u5_*.csv
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_u5_genre_sentiment_heatmap(seekers: list[dict], movie_info: dict):
-    """类型 × 情感占比热力图。"""
+    """各类型情感占比分布（分组柱状图，含 Overall 参照组）。"""
     log("=" * 50)
-    log("U5: 类型 × 情感占比热力图")
+    log("U5: 类型情感占比分布（柱状图 + Overall 参照）")
 
     stats = _compute_user_genre_stats(seekers, movie_info)
     genres = _filter_genres(stats)
@@ -616,25 +623,39 @@ def dim_u5_genre_sentiment_heatmap(seekers: list[dict], movie_info: dict):
         log(f"  无数据足够的类型（每个至少 {MIN_DATA_ROWS} 次提及）")
         return
 
-    # 按正面占比降序排列（让最正面的类型在最上面）
+    # 按正面占比降序排列
     genres = sorted(genres, key=lambda g: stats[g]['positive'] / stats[g]['count'], reverse=True)
 
     sent_keys = ['positive', 'neutral', 'negative']
-    sent_labels = ['Positive', 'Neutral', 'Negative']
-    row_labels = [stats[g]['genre_en'] for g in genres]
-    matrix = np.zeros((len(genres), 3))
-    for i, g in enumerate(genres):
-        n = stats[g]['count']
-        for j, k in enumerate(sent_keys):
-            matrix[i, j] = stats[g][k] / n * 100
 
-    _plot_heatmap(
-        matrix, row_labels, sent_labels,
-        'Genre × Sentiment Proportion Heatmap (User-Mentioned Movies, %)',
+    # ── 计算全局 Overall 参照组 ──
+    total_count = sum(stats[g]['count'] for g in genres)
+    overall = {}
+    for k in sent_keys:
+        overall[k] = sum(stats[g][k] for g in genres) / max(total_count, 1) * 100
+    overall_avg = sum(stats[g]['avg_score'] * stats[g]['weight_sum'] for g in genres) / \
+                  max(sum(stats[g]['weight_sum'] for g in genres), 1.0)
+    log(f"  Overall: 正面={overall['positive']:.1f}%, "
+        f"中性={overall['neutral']:.1f}%, 负面={overall['negative']:.1f}%")
+
+    # ── 构建分组柱状图数据 ──
+    # groups = 情感类型（3个），categories = 类型名 + Overall（x 轴）
+    sent_data = {}
+    for sk in sent_keys:
+        sent_data[sk] = {}
+        for g in genres:
+            s = stats[g]
+            n = s['count']
+            sent_data[sk][s['genre_en']] = s[sk] / n * 100
+        # 添加 Overall 参照组
+        sent_data[sk]['Overall'] = overall[sk]
+
+    _plot_grouped_bar(
+        sent_data,
+        'Genre Sentiment Proportion (User-Mentioned, with Overall Baseline)',
         'u5_genre_sentiment_heatmap.png',
-        fmt='.1f',
-        cmap='RdBu_r',
-        cbar_label='Proportion (%)',
+        ylabel='Proportion (%)',
+        colors=SENT_COLORS,
     )
 
     # ── CSV ──
@@ -643,31 +664,36 @@ def dim_u5_genre_sentiment_heatmap(seekers: list[dict], movie_info: dict):
         w = csv.writer(f)
         w.writerow(['genre_cn', 'genre_en', 'count',
                     'positive_pct', 'neutral_pct', 'negative_pct', 'avg_score'])
-        for i, g in enumerate(genres):
+        for g in genres:
             s = stats[g]
             n = s['count']
             w.writerow([
                 g, s['genre_en'], n,
-                f'{matrix[i, 0]:.1f}',
-                f'{matrix[i, 1]:.1f}',
-                f'{matrix[i, 2]:.1f}',
+                f'{s["positive"]/n*100:.1f}',
+                f'{s["neutral"]/n*100:.1f}',
+                f'{s["negative"]/n*100:.1f}',
                 f'{s["avg_score"]:.3f}',
             ])
+        # Overall 参照行
+        w.writerow(['__overall__', 'Overall', total_count,
+                    f'{overall["positive"]:.1f}', f'{overall["neutral"]:.1f}',
+                    f'{overall["negative"]:.1f}', f'{overall_avg:.3f}'])
     log(f"Saved: {csv_path}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  U6: 类型 × 强度占比热力图 (Genre × Intensity Proportion Heatmap)
-#  U6: Genre × Intensity Proportion Heatmap
+#  U6: 类型强度占比分布 (Genre Intensity Proportion Distribution)
+#  U6: Genre Intensity Proportion Distribution
 # ═══════════════════════════════════════════════════════════════════════
-# 【图表类型】热力图: 行=类型, 列=(mild, moderate, strong), 值=占比%
+# 【图表类型】分组柱状图: x 轴=类型(含 Overall 参照组), 每组 3 根柱(轻微/中等/强烈)
+# 【统计口径】各类型 mild/moderate/strong 占比%，Overall 为全局均值
 # 【输出文件】PNG: u6_genre_intensity_heatmap.png, CSV: u6_*.csv
 # ═══════════════════════════════════════════════════════════════════════
 
 def dim_u6_genre_intensity_heatmap(seekers: list[dict], movie_info: dict):
-    """类型 × 强度占比热力图。"""
+    """各类型情感强度占比分布（分组柱状图，含 Overall 参照组）。"""
     log("=" * 50)
-    log("U6: 类型 × 强度占比热力图")
+    log("U6: 类型强度占比分布（柱状图 + Overall 参照）")
 
     stats = _compute_user_genre_stats(seekers, movie_info)
     genres = _filter_genres(stats)
@@ -679,21 +705,33 @@ def dim_u6_genre_intensity_heatmap(seekers: list[dict], movie_info: dict):
     genres = sorted(genres, key=lambda g: stats[g]['strong'] / stats[g]['count'], reverse=True)
 
     inten_keys = ['mild', 'moderate', 'strong']
-    inten_labels = ['Mild', 'Moderate', 'Strong']
-    row_labels = [stats[g]['genre_en'] for g in genres]
-    matrix = np.zeros((len(genres), 3))
-    for i, g in enumerate(genres):
-        n = stats[g]['count']
-        for j, k in enumerate(inten_keys):
-            matrix[i, j] = stats[g][k] / n * 100
 
-    _plot_heatmap(
-        matrix, row_labels, inten_labels,
-        'Genre × Intensity Proportion Heatmap (User-Mentioned Movies, %)',
+    # ── 计算全局 Overall 参照组 ──
+    total_count = sum(stats[g]['count'] for g in genres)
+    overall = {}
+    for k in inten_keys:
+        overall[k] = sum(stats[g][k] for g in genres) / max(total_count, 1) * 100
+    log(f"  Overall: 轻微={overall['mild']:.1f}%, "
+        f"中等={overall['moderate']:.1f}%, 强烈={overall['strong']:.1f}%")
+
+    # ── 构建分组柱状图数据 ──
+    # groups = 强度类型（3个），categories = 类型名 + Overall（x 轴）
+    inten_data = {}
+    for ik in inten_keys:
+        inten_data[ik] = {}
+        for g in genres:
+            s = stats[g]
+            n = s['count']
+            inten_data[ik][s['genre_en']] = s[ik] / n * 100
+        # 添加 Overall 参照组
+        inten_data[ik]['Overall'] = overall[ik]
+
+    _plot_grouped_bar(
+        inten_data,
+        'Genre Intensity Proportion (User-Mentioned, with Overall Baseline)',
         'u6_genre_intensity_heatmap.png',
-        fmt='.1f',
-        cmap='YlOrRd',
-        cbar_label='Proportion (%)',
+        ylabel='Proportion (%)',
+        colors=INTEN_COLORS,
     )
 
     # ── CSV ──
@@ -702,15 +740,19 @@ def dim_u6_genre_intensity_heatmap(seekers: list[dict], movie_info: dict):
         w = csv.writer(f)
         w.writerow(['genre_cn', 'genre_en', 'count',
                     'mild_pct', 'moderate_pct', 'strong_pct'])
-        for i, g in enumerate(genres):
+        for g in genres:
             s = stats[g]
             n = s['count']
             w.writerow([
                 g, s['genre_en'], n,
-                f'{matrix[i, 0]:.1f}',
-                f'{matrix[i, 1]:.1f}',
-                f'{matrix[i, 2]:.1f}',
+                f'{s["mild"]/n*100:.1f}',
+                f'{s["moderate"]/n*100:.1f}',
+                f'{s["strong"]/n*100:.1f}',
             ])
+        # Overall 参照行
+        w.writerow(['__overall__', 'Overall', total_count,
+                    f'{overall["mild"]:.1f}', f'{overall["moderate"]:.1f}',
+                    f'{overall["strong"]:.1f}'])
     log(f"Saved: {csv_path}")
 
 

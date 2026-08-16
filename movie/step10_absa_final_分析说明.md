@@ -415,3 +415,294 @@ NLI 过滤丢弃了近四分之一的候选，这些是"方面关键词命中但
 3. **根本原因**：节假日本身是异质的——万圣节、情人节、超级碗的观影主题完全不同，笼统归为“holiday”再与非节假日对比会互相抵消。正确的分析维度是逐节假日（A5 热力图），而非二元对比（A3）。
 
 4. **与 step7 的一致性**：step7 的情人节（爱情片份额不增反降）和独立日（爱国片无差异）分析已佐证推荐系统对日期不敏感，本节的统计检验进一步确认了这一点。
+
+
+
+
+
+
+
+深度思考
+```The user wants me to summarize the analysis steps in the step10_absa_final_v2.py file. Let me read this file first.
+
+```
+**已查看文件** *step10_absa_final_v2.py*
+深度思考
+```Now let me read the dependencies to understand the full picture - the key modules that this file imports from.
+
+```
+让我读取它依赖的关键模块，以便完整个步骤。理解每
+
+
+**已查看文件** *absa_aspects.py*
+
+**已查看文件** *conv_pairs.py*
+
+**已查看文件** *absa_nli.py*
+深度思考
+```Now I need to read the v2 module to understand the dim functions that are reused (dim_a1 through dim_a5, _save_csv, _aggregate_to_conv_level).
+
+```
+**已查看文件** *step10_absa_v2.py*
+深度思考
+```Now I have a complete understanding of the code. Let me also read the step10_absa.py to understand the SentimentAnalyzer and _sentiment_to_numeric functions referenced.
+
+```
+现在我已经完整理解了整个代码及其依赖。以下是 `step10_absa_final_v2.py` 的详细分析步骤总结：
+
+
+
+
+
+
+
+## 分析步骤详解
+
+#### 步骤 0：初始化与输出目录重定向
+
+**代码位置**：[第 22–25 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L22-L25)
+
+- 调用 `setup_matplotlib()` 设置 Agg 后端 + 中文字体
+- 将 v2 模块的 `STEP_OUT` 变量重定向到 `output/movie/step10/final_user/`
+- 复用 v2 的全部 `dim_a1`–`dim_a5` 绘图函数和 `_save_csv`、`_aggregate_to_conv_level` 工具函数，**不重复实现**
+
+**说明**：这是一个巧妙的设计——通过修改 v2 模块的全局变量 `STEP_OUT`，让 v2 的所有输出函数自动写入新目录，避免代码重复。
+
+---
+
+#### 步骤 1：归一化 VADER 情感分析器
+
+**代码位置**：[第 32–52 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L32-L52) — `NormalizedVaderAnalyzer` 类
+
+**功能**：仅使用 VADER 进行情感分析，分数归一化到 [-1, 1] 有符号区间。
+
+**详细逻辑**：
+1. 初始化时加载 `vaderSentiment` 的 `SentimentIntensityAnalyzer`
+2. `predict(text)` 方法：
+   - 空文本或长度 < 3 → 返回 `('NEUTRAL', 0.0)`，`last_model = 'none'`
+   - 调用 `polarity_scores()` 取 `compound` 分数（范围 [-1, 1]）
+   - `compound >= 0.05` → `('POSITIVE', compound)`，保留正值
+   - `compound <= -0.05` → `('NEGATIVE', compound)`，**保留负值**（有符号）
+   - 其余 → `('NEUTRAL', 0.0)`
+3. `last_model` 固定为 `'vader'`（接口与 v2 的三级降级分析器兼容）
+
+**与 v2 的 `SentimentAnalyzer` 对比**：
+- v2 使用三级降级：distilbert 模型 → VADER → 词表朴素统计
+- 本版本只用 VADER，但关键改进是 **NEGATIVE 返回负值**（v2 的 `_sentiment_to_numeric` 把 NEGATIVE 映射为 -1，但分数丢失了强度信息；本版本保留 compound 分值作为强度）
+
+---
+
+#### 步骤 2：会话重组与配对
+
+**代码位置**：[第 63 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L63) 调用 `build_pairs_from_rows(rows)`，实现在 [conv_pairs.py](file://D:\workspaces\python\llm-movie\movie\utils\conv_pairs.py)
+
+**功能**：将原始数据行重组为会话，并生成 (系统回复 → 用户提问) 配对。
+
+**详细逻辑**：
+1. **`regroup_sessions(rows)`**：按 `session_id` 分组所有行，组内按 `(turn_order, utc_time)` 排序
+2. **`emit_pairs(turns)`**：在每个 `conv_id` 内部（**不跨 conv_id**）产出配对：
+   - 找到系统回复行 → 在同一 `conv_id` 内找紧随其后的用户消息 → 组成一对
+   - 末条系统回复若无人回应 → 标记为 `is_solo_system` 单独保留
+   - 时段/节假日属性从该 session 的**首条 seeker 行**继承（session 级）
+   - 跨日会话标记 `cross_day`（首末 seeker 日期不同）
+3. **输出**：每个 pair 包含 `session_id`、`pair_id`、`system_text`、`user_text`、`date`、`period`、`is_holiday`、`holiday_name`、`cross_day` 等字段
+
+**说明**：配对在 `conv_id` 内部进行是因为 Reddit 一个会话含多个并行 `conv_id`（每个是对原问题的一个独立回答链），跨 `conv_id` 配对会把无关子线程错配。
+
+---
+
+#### 步骤 3：方面检测（Phase 1 候选生成 + 去噪）
+
+**代码位置**：[第 72 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L72) 调用 `detect_aspects_v2(text)`，实现在 [absa_aspects.py](file://D:\workspaces\python\llm-movie\movie\utils\absa_aspects.py)
+
+**功能**：在用户提问文本中检测 10 个电影评价方面的提及，并做多级去噪。
+
+**10 个方面**（[ASPECTS_V2](file://D:\workspaces\python\llm-movie\movie\utils\absa_aspects.py#L21-L205)）：
+
+| 方面 key       | 英文标签         | 中文标签 | 关键词示例                                   |
+| -------------- | ---------------- | -------- | -------------------------------------------- |
+| genre          | Genre/Style      | 类型     | comedy, horror, sci-fi, romance...           |
+| plot           | Plot/Story       | 剧情     | plot, story, twist, ending, screenplay...    |
+| cast           | Cast/Acting      | 演员     | actor, performance, starring, portrayed...   |
+| visual         | Visual/Effects   | 视效     | cinematography, CGI, visual effects...       |
+| audio          | Audio/Music      | 音效     | soundtrack, score, background music...       |
+| direction      | Direction        | 导演     | director, pacing, atmosphere, vision...      |
+| emotion        | Emotion/Tone     | 情感     | moving, hilarious, boring, funny...          |
+| recommendation | Recommendation   | 推荐     | must-watch, highly recommend, masterpiece... |
+| comparison     | Comparison       | 比较     | reminds me of, better than, similar to...    |
+| content        | Content/Warnings | 内容     | violent, family-friendly, R-rated...         |
+
+**去噪机制**（4 层）：
+1. **请求模式黑名单**（[`_REQUEST_PATTERNS`](file://D:\workspaces\python\llm-movie\movie\utils\absa_aspects.py#L233-L246)）：整句丢弃征询句式（如 "looking for movies..."、"can you recommend..."），这些不是评价
+2. **POS 消歧**（[`_is_request_like_usage`](file://D:\workspaces\python\llm-movie\movie\utils\absa_aspects.py#L294-L315)）：用 `nltk.pos_tag` 判断 `like` 是介词（"movies like X" → 丢弃）还是动词（"I liked it" → 保留）
+3. **词边界正则**（[`_kw_pattern`](file://D:\workspaces\python\llm-movie\movie\utils\absa_aspects.py#L216-L220)）：用 `\b` 边界匹配避免子串误匹配
+4. **最长匹配 + 方面去重**（[第 352–371 行](file://D:\workspaces\python\llm-movie\movie\utils\absa_aspects.py#L352-L371)）：关键词按长度降序排列优先匹配长词；同一方面只取第一个命中片段（一方面一片段）
+
+**输出**：候选列表 `[{aspect, snippet, keyword, confidence}]`，`confidence` 固定 1.0（Phase 2 NLI 提供）。
+
+---
+
+#### 步骤 4：NLI 评价上下文过滤（Phase 2 ③.2）
+
+**代码位置**：[第 74–76 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L74-L76) 调用 `has_evaluative_context(c['snippet'])`，实现在 [absa_nli.py](file://D:\workspaces\python\llm-movie\movie\utils\absa_nli.py)
+
+**功能**：过滤掉"纯提及但无评价"的候选句（如 "What would the twist be?" 含 `twist` 关键词但没有评价词）。
+
+**规则版逻辑**（[`has_evaluative_context`](file://D:\workspaces\python\llm-movie\movie\utils\absa_nli.py#L62-L72)）：
+- 句中是否出现以下任一评价标记词集：
+  - `_OPINION_ADJ`：评价形容词（good, great, boring, amazing...）
+  - `_COPULA`：系动词（was, were, felt, seemed...）
+  - `_EVALUATIVE_VERB`：评价动词（loved, hated, delivered, nailed...）
+  - `_DEGREE`：程度副词（really, very, incredibly...）
+- 否定 + 评价形容词也算评价（"not bad"）
+
+**可选升级**：`AspectClassifier` 类支持加载 `all-MiniLM-L6-v2` transformer 模型，用句向量余弦相似度判定，但默认关闭（规则版更快）。
+
+**统计**：被过滤的候选数 `n_nli_filtered` 记入 stats，最终日志输出过滤比例。
+
+---
+
+#### 步骤 5：情感预测
+
+**代码位置**：[第 78 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L78) 调用 `analyzer.predict(c['snippet'])`
+
+**功能**：对通过 NLI 过滤的每个候选片段调用 VADER 情感分析器，得到 `(标签, 分数)`。
+
+**说明**：步骤 4 和 5 在同一个循环中完成——先过滤，后预测，通过的候选组装成 `pair_record`，包含：
+- 会话信息：`session_id`、`pair_id`、`date`、`period`、`is_holiday`、`holiday_name`、`cross_day`
+- 方面信息：`aspect`、`aspect_label`、`keyword`、`snippet`（截取前 200 字符）
+- 情感结果：`sentiment`（标签）、`score`（有符号分数）、`model_used`
+
+---
+
+#### 步骤 6：会话级聚合
+
+**代码位置**：[第 101 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L101) 调用 `v2._aggregate_to_conv_level(pair_records)`，实现在 [step10_absa_v2.py 第 70–95 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_v2.py#L70-L95)
+
+**功能**：将 pair 级记录聚合为会话级记录（1 session × 1 aspect = 1 row）。
+
+**聚合逻辑**：
+1. 按 `(session_id, aspect)` 分组所有 pair 记录
+2. 对每组：
+   - 将情感标签转为数值（POSITIVE→1, NEGATIVE→-1, NEUTRAL→0）通过 `_sentiment_to_numeric`
+   - 计算组内 `mean_sentiment`（均值）、`std_sentiment`（标准差）、`n_pairs`（配对数）、`pos_ratio`（正面比例 = 正值数/总数）
+3. 继承首条记录的时段/节假日属性
+
+**说明**：这一步消除了同一会话内多次提及同一方面带来的重复计数问题，确保每个会话对每个方面只贡献一个聚合值。
+
+---
+
+#### 步骤 7：输出 CSV 数据
+
+**代码位置**：[第 128 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L128) 调用 `v2._save_csv(conv_records, 'a0_conv_records_final_user.csv')`，实现在 [step10_absa_v2.py 第 172–184 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_v2.py#L172-L184)
+
+**输出文件**：`output/movie/step10/final_user/a0_conv_records_final_user.csv`
+
+**CSV 列**：`session_id`、`date`、`period`、`holiday_name`、`cross_day`、`aspect`、`aspect_label`、`mean_sentiment`、`std_sentiment`、`n_pairs`、`pos_ratio`
+
+---
+
+#### 步骤 8：A1 — 方面分布饼图
+
+**代码位置**：[第 129 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L129) 调用 `v2.dim_a1(conv_records)`，实现在 [step10_absa_v2.py 第 191–208 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_v2.py#L191-L208)
+
+**输出**：`a1_aspect_distribution_v2.png`
+
+**内容**：统计各方面在会话级记录中的出现频次，绘制饼图（Set3 配色），显示各占比百分比。按频次降序排列。
+
+---
+
+#### 步骤 9：A2 — 整体方面情感柱状图
+
+**代码位置**：[第 130 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L130) 调用 `v2.dim_a2(conv_records)`，实现在 [step10_absa_v2.py 第 211–217 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_v2.py#L211-L217)
+
+**输出**：`a2_overall_aspect_sentiment_v2.png`
+
+**内容**：合并所有时段（`_overall`），按方面分组绘制柱状图，显示每个方面的平均情感分数（-1 到 +1），带标准差误差棒，零线虚线参照。
+
+---
+
+#### 步骤 10：A3 — 节假日 vs 非节假日对比柱状图
+
+**代码位置**：[第 131 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L131) 调用 `v2.dim_a3(conv_records)`，实现在 [step10_absa_v2.py 第 220–232 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_v2.py#L220-L232)
+
+**输出**：`a3_holiday_vs_nonholiday_v2.png`
+
+**内容**：
+- 节假日组（`period == 'holiday'`）与非节假日组（`period != 'holiday'`）分别聚合
+- 每个方面并排两根柱子（红色=Holiday / 蓝色=Non-holiday），带误差棒
+- 可直观对比节假日是否影响各方面的情感倾向
+
+---
+
+#### 步骤 11：A4 — 节假日 vs 工作日 vs 周末三组对比柱状图
+
+**代码位置**：[第 132 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L132) 调用 `v2.dim_a4(conv_records)`，实现在 [step10_absa_v2.py 第 235–246 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_v2.py#L235-L246)
+
+**输出**：`a4_holiday_workday_weekend_v2.png`
+
+**内容**：
+- 按 `period` 分三组：Holiday / Workday / Weekend
+- 每个方面并排三根柱子，带误差棒
+- 比 A3 更细粒度，能看出工作日和周末是否有差异
+
+---
+
+#### 步骤 12：A5 — 各节假日 × 方面情感热力图
+
+**代码位置**：[第 133 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_final_v2.py#L133) 调用 `v2.dim_a5(conv_records)`，实现在 [step10_absa_v2.py 第 249–282 行](file://D:\workspaces\python\llm-movie\movie\step10_absa_v2.py#L249-L282)
+
+**输出**：`a5_per_holiday_aspect_v2.png`
+
+**内容**：
+- 只取节假日记录（`is_holiday == True`），按 `holiday_name`（取前 8 字符）分组
+- 过滤数据量不足的节假日（< `MIN_DATA_ROWS` 行）
+- 绘制 热力图：行=节假日名称，列=10 个方面，值=平均情感分数
+- 红色=更正面，蓝色=更负面，灰色=无数据（NaN）
+- `center=0` 以零为中心对称配色
+
+---
+
+### 整体流程图
+
+```
+原始数据 rows
+    │
+    ▼
+① 会话重组 + 配对 (build_pairs_from_rows)
+    │  → (系统回复 → 用户提问) 配对
+    ▼
+② 方面检测 (detect_aspects_v2)
+    │  → 10 方面关键词匹配 + 4 层去噪
+    ▼
+③ NLI 过滤 (has_evaluative_context)
+    │  → 丢弃纯提及、保留真评价
+    ▼
+④ 情感预测 (NormalizedVaderAnalyzer.predict)
+    │  → VADER compound 分数 [-1, +1]
+    ▼
+⑤ 会话级聚合 (_aggregate_to_conv_level)
+    │  → 1 session × 1 aspect = 1 row
+    ▼
+⑥ 输出 CSV + 5 张图表 (A1-A5)
+    │  → output/movie/step10/final_user/
+    ▼
+完成
+```
+
+
+---
+
+### 关键设计决策
+
+| 决策                            | 原因                                          |
+| ------------------------------- | --------------------------------------------- |
+| 分析 user_text 而非 system_text | 用户提问更能反映用户对电影的真实评价          |
+| 只用 VADER 不用 distilbert      | 简化依赖，VADER 足够稳定且快（全量约 8 分钟） |
+| NEGATIVE 保留负值               | 有符号分数保留情感强度信息                    |
+| NLI 规则版而非模型版            | 避免 transformer 模型下载，规则版足够精准     |
+| 去掉双轨配对                    | 实测覆盖率仅 0.8%，性价比太低                 |
+| 复用 v2 的 dim 函数             | 通过重定向 `STEP_OUT` 变量避免代码重复        |
+
+
+

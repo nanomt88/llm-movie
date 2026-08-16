@@ -242,14 +242,14 @@ def _plot(per_year_df, pooled, path):
     ax.bar(x - w / 2, val_shares,  w, yerr=val_errs,  label='Valentine',
            color='#e74c3c', alpha=0.85, capsize=4)
     ax.bar(x + w / 2, ctrl_shares, w, yerr=ctrl_errs,
-           label=f'Control (±{CONTROL_WINDOW_DAYS}d, non-holiday)',
+           label=f'Baseline (±{CONTROL_WINDOW_DAYS}d, non-holiday)',
            color='#3498db', alpha=0.85, capsize=4)
 
     ax.set_xticks(x)
     ax.set_xticklabels(years)
     ax.set_ylabel('Romance Share (records with ≥1 romance movie)')
     ax.set_title(
-        "Valentine vs Control — Romance Genre Share\n"
+        "Valentine vs Baseline — Romance Genre Share\n"
         f"pooled Δ={pooled['delta_share']:.4f}, RR={pooled['relative_risk']:.2f}, "
         f"p(χ²)={pooled['p_chi2']:.4f}, p(Fisher)={pooled['p_fisher']:.4f}, "
         f"Cohen's h={pooled['cohens_h']:.3f}",

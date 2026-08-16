@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Step 10 ABSA Final (v3-lite): v2 + NLI 过滤，无双轨配对.
-最终推荐版本：B 语料切换 + ③.1 去噪 + ③.2 NLI + ⑤ 会话级聚合。
+Step 10 ABSA Final (v3-lite, 用户提问版): v2 + NLI 过滤，无双轨配对.
+最终推荐版本：B 语料切换（用户提问） + ③.1 去噪 + ③.2 NLI + ⑤ 会话级聚合。
 （去掉 v3 的双轨配对 —— 实测覆盖率仅 0.8%，性价比低）
 
-输出到 output/movie/step10/final/，复用 v2 的 dim/plot 函数。
+分析对象：用户提问内容（user_text），而非系统回复。
+输出到 output/movie/step10/final_user/，复用 v2 的 dim/plot 函数。
 分析器用归一化 VADER（last_model + 有符号 [-1,1] 分数），全量数据约 8 分钟。
 """
 
@@ -20,7 +21,7 @@ import movie.step10_absa_v2 as v2
 
 # ── 初始化：复用 v2 的全部 dim/plot，仅重定向输出目录 ──────────────
 setup_matplotlib()
-v2.STEP_OUT = os.path.join(STEP_DIRS[10], 'final')   # 重定向到 final/
+v2.STEP_OUT = os.path.join(STEP_DIRS[10], 'final_user')   # 重定向到 final_user/（用户提问版）
 os.makedirs(v2.STEP_OUT, exist_ok=True)
 
 
@@ -56,7 +57,8 @@ class NormalizedVaderAnalyzer:
 # ═══════════════════════════════════════════════════════════════════════
 
 def extract_final(rows, analyzer):
-    """v3-lite 提取：系统回复语料 + 去噪 + NLI 过滤 + 会话级聚合（无双轨）。
+    """v3-lite 提取：用户提问语料 + 去噪 + NLI 过滤 + 会话级聚合（无双轨）。
+    分析对象为 pair 中的 user_text（用户提问内容），非 system_text。
     Returns: (pair_records, conv_records, stats)"""
     pairs = build_pairs_from_rows(rows)
     pair_records = []
@@ -64,7 +66,7 @@ def extract_final(rows, analyzer):
     n_nli_filtered = 0
 
     for p in pairs:
-        text = p['system_text']
+        text = p['user_text']
         if not text:
             continue
         candidates = detect_aspects_v2(text)
@@ -92,12 +94,12 @@ def extract_final(rows, analyzer):
             })
             stats[c['aspect']] += 1
 
-    log(f"  final Pairs: {len(pairs)} | records: {len(pair_records)}", "final")
-    log(f"  final Aspects: {dict(stats)}", "final")
-    log(f"  final NLI filtered (non-evaluative): {n_nli_filtered} "
-        f"= {n_nli_filtered / max(n_nli_filtered + len(pair_records), 1) * 100:.1f}%", "final")
+    log(f"  final_user Pairs: {len(pairs)} | records: {len(pair_records)}", "final_user")
+    log(f"  final_user Aspects: {dict(stats)}", "final_user")
+    log(f"  final_user NLI filtered (non-evaluative): {n_nli_filtered} "
+        f"= {n_nli_filtered / max(n_nli_filtered + len(pair_records), 1) * 100:.1f}%", "final_user")
     conv_records = v2._aggregate_to_conv_level(pair_records)
-    log(f"  final Conv-level: {len(conv_records)}", "final")
+    log(f"  final_user Conv-level: {len(conv_records)}", "final_user")
     stats_out = {'n_pairs': len(pairs), 'n_records': len(pair_records),
                  'n_nli_filtered': n_nli_filtered, 'n_conv': len(conv_records),
                  'aspect_counts': dict(stats)}
@@ -110,7 +112,7 @@ def extract_final(rows, analyzer):
 
 def main(data=None, analyzer=None):
     log("=" * 60)
-    log("Step 10 ABSA Final (v3-lite: v2 + NLI, no dual-track)")
+    log("Step 10 ABSA Final (v3-lite, 用户提问版: v2 + NLI, no dual-track)")
     log("=" * 60)
     if data is None:
         from movie.data_loader import load_all
@@ -122,8 +124,8 @@ def main(data=None, analyzer=None):
     if not conv_records:
         log("  No conv data. Skip.")
         return pair_records, conv_records, stats
-    # 复用 v2 的 A1-A5 + CSV（输出到 v2.STEP_OUT = final/）
-    v2._save_csv(conv_records, 'a0_conv_records_final.csv')
+    # 复用 v2 的 A1-A5 + CSV（输出到 v2.STEP_OUT = final_user/）
+    v2._save_csv(conv_records, 'a0_conv_records_final_user.csv')
     v2.dim_a1(conv_records)
     v2.dim_a2(conv_records)
     v2.dim_a3(conv_records)

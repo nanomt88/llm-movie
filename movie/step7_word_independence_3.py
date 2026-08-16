@@ -498,7 +498,7 @@ def _plot_all_definitions(per_year_by_def, pooled_by_def, path):
         ax.bar(x - w / 2, ind_shares,  w, yerr=ind_errs,  label='Independence',
                color='#e74c3c', alpha=0.85, capsize=4)
         ax.bar(x + w / 2, ctrl_shares, w, yerr=ctrl_errs,
-               label=f'Control (±{CONTROL_WINDOW_DAYS}d, non-holiday)',
+               label=f'Baseline (±{CONTROL_WINDOW_DAYS}d, non-holiday)',
                color='#3498db', alpha=0.85, capsize=4)
 
         ax.set_xticks(x)
@@ -519,7 +519,7 @@ def _plot_all_definitions(per_year_by_def, pooled_by_def, path):
     # 隐藏第 6 个空格子
     axes_flat[5].axis('off')
 
-    fig.suptitle("US Independence Day vs Control — Patriotic Movie Share (5 Definitions)",
+    fig.suptitle("US Independence Day vs Baseline — Patriotic Movie Share (5 Definitions)",
                  fontsize=14)
     fig.tight_layout()
     fig.savefig(path)
@@ -726,7 +726,7 @@ def _plot_user_definitions(per_year_by_ndef, pooled_by_ndef, path):
         ax.bar(x - w / 2, ind_shares,  w, yerr=ind_errs,  label='Independence',
                color='#e74c3c', alpha=0.85, capsize=4)
         ax.bar(x + w / 2, ctrl_shares, w, yerr=ctrl_errs,
-               label=f'Control (±{CONTROL_WINDOW_DAYS}d, non-holiday)',
+               label=f'Baseline (±{CONTROL_WINDOW_DAYS}d, non-holiday)',
                color='#3498db', alpha=0.85, capsize=4)
 
         ax.set_xticks(x)
@@ -744,7 +744,7 @@ def _plot_user_definitions(per_year_by_ndef, pooled_by_ndef, path):
         ymax = max(ind_shares + ctrl_shares) if (ind_shares or ctrl_shares) else 0.0
         ax.set_ylim(0, ymax * 1.4 + 0.02)
 
-    fig.suptitle("User Question Content: Patriotic Interest on Independence Day vs Control",
+    fig.suptitle("User Question Content: Patriotic Interest on Independence Day vs Baseline",
                  fontsize=12)
     fig.tight_layout()
     fig.savefig(path)
